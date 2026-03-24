@@ -93,32 +93,8 @@ logged_since() {
     return 1
 }
 
-generate_spy_name() {
-    printf 'SPY_%s\n' "$(head -c 6 /dev/urandom | xxd -p)"
-}
-
-generate_worker_secret() {
-    printf 'PROC_%s\n' "$(head -c 6 /dev/urandom | xxd -p)"
-}
-
-generate_secret_flag() {
-    printf 'ENV_%s\n' "$(head -c 6 /dev/urandom | xxd -p)"
-}
-
-generate_path_flag() {
-    printf 'PATH_%s\n' "$(head -c 6 /dev/urandom | xxd -p)"
-}
-
-generate_bigfile_name() {
-    printf 'archive_%s.bin\n' "$(head -c 6 /dev/urandom | xxd -p)"
-}
-
-generate_web_flag() {
-    printf 'WEB_%s\n' "$(head -c 6 /dev/urandom | xxd -p)"
-}
-
-generate_hidden_flag() {
-    printf 'HIDDEN_%s\n' "$(head -c 6 /dev/urandom | xxd -p)"
+generate_token() {
+    printf '%s%s\n' "$1" "$(head -c 6 /dev/urandom | xxd -p)"
 }
 
 generate_hidden_port() {
@@ -142,7 +118,7 @@ randomize_big_file() {
 
     dir_index=$((RANDOM % 3))
     dir="$HOME/challenges/search/files/${dirs[$dir_index]}"
-    name=$(generate_bigfile_name)
+    name="$(generate_token archive_).bin"
     path="$dir/$name"
 
     dd if=/dev/urandom of="$path" bs=1K count=200 status=none
@@ -717,7 +693,7 @@ reset_6_1() {
     if [ -n "$CURRENT" ]; then
         pkill -f "^${CURRENT} 99999$" > /dev/null 2>&1 || true
     fi
-    NEXT=$(generate_spy_name)
+    NEXT=$(generate_token SPY_)
     printf '%s\n' "$NEXT" > "$SPY_NAME_FILE"
     chmod 600 "$SPY_NAME_FILE"
     start_spy_process "$NEXT"
@@ -779,7 +755,7 @@ verify_6_3() {
 }
 
 reset_6_3() {
-    WORKER_SECRET=$(generate_worker_secret)
+    WORKER_SECRET=$(generate_token PROC_)
     WORKER_SLOT=$((RANDOM % 4 + 1))
     printf '%s\n' "$WORKER_SECRET" > "$WORKER_SECRET_FILE"
     printf '%s\n' "$WORKER_SLOT" > "$WORKER_SLOT_FILE"
@@ -824,7 +800,7 @@ verify_7_1() {
 
 reset_7_1() {
     if [ ! -f "$SECRET_FLAG_FILE" ]; then
-        SECRET_FLAG=$(generate_secret_flag)
+        SECRET_FLAG=$(generate_token ENV_)
         printf '%s\n' "$SECRET_FLAG" > "$SECRET_FLAG_FILE"
         chmod 600 "$SECRET_FLAG_FILE"
     fi
@@ -868,7 +844,7 @@ verify_7_2() {
 }
 
 reset_7_2() {
-    PATH_FLAG=$(generate_path_flag)
+    PATH_FLAG=$(generate_token PATH_)
     printf '%s\n' "$PATH_FLAG" > "$PATH_FLAG_FILE"
     chmod 600 "$PATH_FLAG_FILE"
     write_getflag_script
@@ -1081,7 +1057,7 @@ verify_9_2() {
 }
 
 reset_9_2() {
-    WEB_FLAG=$(generate_web_flag)
+    WEB_FLAG=$(generate_token WEB_)
     printf '%s\n' "$WEB_FLAG" > "$WEB_FLAG_FILE"
     chmod 600 "$WEB_FLAG_FILE"
     restart_network_services
@@ -1130,7 +1106,7 @@ verify_9_3() {
 }
 
 reset_9_3() {
-    HIDDEN_FLAG=$(generate_hidden_flag)
+    HIDDEN_FLAG=$(generate_token HIDDEN_)
     HIDDEN_PORT=$(generate_hidden_port)
     printf '%s\n' "$HIDDEN_FLAG" > "$HIDDEN_FLAG_FILE"
     printf '%s\n' "$HIDDEN_PORT" > "$HIDDEN_PORT_FILE"

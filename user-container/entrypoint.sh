@@ -16,32 +16,8 @@ WEB_SERVICE_CONFIG="/opt/.web_service"
 HIDDEN_SERVICE_CONFIG="/opt/.hidden_service"
 SSH_SECRET_ENV_CONFIG="/etc/ssh/sshd_config.d/workshop-secret.conf"
 
-generate_spy_name() {
-    printf 'SPY_%s\n' "$(head -c 6 /dev/urandom | xxd -p)"
-}
-
-generate_worker_secret() {
-    printf 'PROC_%s\n' "$(head -c 6 /dev/urandom | xxd -p)"
-}
-
-generate_secret_flag() {
-    printf 'ENV_%s\n' "$(head -c 6 /dev/urandom | xxd -p)"
-}
-
-generate_path_flag() {
-    printf 'PATH_%s\n' "$(head -c 6 /dev/urandom | xxd -p)"
-}
-
-generate_bigfile_name() {
-    printf 'archive_%s.bin\n' "$(head -c 6 /dev/urandom | xxd -p)"
-}
-
-generate_web_flag() {
-    printf 'WEB_%s\n' "$(head -c 6 /dev/urandom | xxd -p)"
-}
-
-generate_hidden_flag() {
-    printf 'HIDDEN_%s\n' "$(head -c 6 /dev/urandom | xxd -p)"
+generate_token() {
+    printf '%s%s\n' "$1" "$(head -c 6 /dev/urandom | xxd -p)"
 }
 
 generate_hidden_port() {
@@ -65,7 +41,7 @@ randomize_big_file() {
 
     dir_index=$((RANDOM % 3))
     dir="$HOME_DIR/challenges/search/files/${dirs[$dir_index]}"
-    name=$(generate_bigfile_name)
+    name="$(generate_token archive_).bin"
     path="$dir/$name"
 
     dd if=/dev/urandom of="$path" bs=1K count=200 status=none
@@ -170,31 +146,31 @@ if [ ! -f /opt/.initialized ]; then
         "$SEARCH_RAW" "$SEARCH_TOKEN" > "$SEARCH_DIR/file_${SEARCH_NUM}.txt"
     chown ieee:ieee "$SEARCH_DIR/file_${SEARCH_NUM}.txt"
 
-    SPY_NAME=$(generate_spy_name)
+    SPY_NAME=$(generate_token SPY_)
     printf '%s\n' "$SPY_NAME" > "$SPY_NAME_FILE"
     chmod 600 "$SPY_NAME_FILE"
 
-    WORKER_SECRET=$(generate_worker_secret)
+    WORKER_SECRET=$(generate_token PROC_)
     WORKER_SLOT=$((RANDOM % 4 + 1))
     printf '%s\n' "$WORKER_SECRET" > "$WORKER_SECRET_FILE"
     printf '%s\n' "$WORKER_SLOT" > "$WORKER_SLOT_FILE"
     chmod 600 "$WORKER_SECRET_FILE" "$WORKER_SLOT_FILE"
 
-    SECRET_FLAG=$(generate_secret_flag)
+    SECRET_FLAG=$(generate_token ENV_)
     printf '%s\n' "$SECRET_FLAG" > "$SECRET_FLAG_FILE"
     chmod 600 "$SECRET_FLAG_FILE"
 
-    PATH_FLAG=$(generate_path_flag)
+    PATH_FLAG=$(generate_token PATH_)
     printf '%s\n' "$PATH_FLAG" > "$PATH_FLAG_FILE"
     chmod 600 "$PATH_FLAG_FILE"
 
     randomize_big_file
 
-    WEB_FLAG=$(generate_web_flag)
+    WEB_FLAG=$(generate_token WEB_)
     printf '%s\n' "$WEB_FLAG" > "$WEB_FLAG_FILE"
     chmod 600 "$WEB_FLAG_FILE"
 
-    HIDDEN_FLAG=$(generate_hidden_flag)
+    HIDDEN_FLAG=$(generate_token HIDDEN_)
     HIDDEN_PORT=$(generate_hidden_port)
     printf '%s\n' "$HIDDEN_FLAG" > "$HIDDEN_FLAG_FILE"
     printf '%s\n' "$HIDDEN_PORT" > "$HIDDEN_PORT_FILE"
@@ -204,13 +180,13 @@ if [ ! -f /opt/.initialized ]; then
 fi
 
 if [ ! -f "$SPY_NAME_FILE" ]; then
-    SPY_NAME=$(generate_spy_name)
+    SPY_NAME=$(generate_token SPY_)
     printf '%s\n' "$SPY_NAME" > "$SPY_NAME_FILE"
     chmod 600 "$SPY_NAME_FILE"
 fi
 
 if [ ! -f "$WORKER_SECRET_FILE" ] || [ ! -f "$WORKER_SLOT_FILE" ]; then
-    WORKER_SECRET=$(generate_worker_secret)
+    WORKER_SECRET=$(generate_token PROC_)
     WORKER_SLOT=$((RANDOM % 4 + 1))
     printf '%s\n' "$WORKER_SECRET" > "$WORKER_SECRET_FILE"
     printf '%s\n' "$WORKER_SLOT" > "$WORKER_SLOT_FILE"
@@ -218,13 +194,13 @@ if [ ! -f "$WORKER_SECRET_FILE" ] || [ ! -f "$WORKER_SLOT_FILE" ]; then
 fi
 
 if [ ! -f "$SECRET_FLAG_FILE" ]; then
-    SECRET_FLAG=$(generate_secret_flag)
+    SECRET_FLAG=$(generate_token ENV_)
     printf '%s\n' "$SECRET_FLAG" > "$SECRET_FLAG_FILE"
     chmod 600 "$SECRET_FLAG_FILE"
 fi
 
 if [ ! -f "$PATH_FLAG_FILE" ]; then
-    PATH_FLAG=$(generate_path_flag)
+    PATH_FLAG=$(generate_token PATH_)
     printf '%s\n' "$PATH_FLAG" > "$PATH_FLAG_FILE"
     chmod 600 "$PATH_FLAG_FILE"
 fi
@@ -234,13 +210,13 @@ if [ ! -f "$BIGFILE_PATH_FILE" ] || [ ! -f "$(cat "$BIGFILE_PATH_FILE" 2>/dev/nu
 fi
 
 if [ ! -f "$WEB_FLAG_FILE" ]; then
-    WEB_FLAG=$(generate_web_flag)
+    WEB_FLAG=$(generate_token WEB_)
     printf '%s\n' "$WEB_FLAG" > "$WEB_FLAG_FILE"
     chmod 600 "$WEB_FLAG_FILE"
 fi
 
 if [ ! -f "$HIDDEN_FLAG_FILE" ] || [ ! -f "$HIDDEN_PORT_FILE" ]; then
-    HIDDEN_FLAG=$(generate_hidden_flag)
+    HIDDEN_FLAG=$(generate_token HIDDEN_)
     HIDDEN_PORT=$(generate_hidden_port)
     printf '%s\n' "$HIDDEN_FLAG" > "$HIDDEN_FLAG_FILE"
     printf '%s\n' "$HIDDEN_PORT" > "$HIDDEN_PORT_FILE"
