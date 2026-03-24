@@ -1,0 +1,33 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<section class="panel">
+  <h1>{{ app.title }}</h1>
+  <p>{{ app.message }}</p>
+  <p class="muted">Workshop only. Do not enter a real password here. Passwords sent to this site can be read on the network, so use a temporary workshop-only password that you do not reuse anywhere else.</p>
+  <p class="muted">One IP can claim {{ app.ip_registration_limit }} account.</p>
+</section>
+
+<section class="grid two" style="margin-top: 16px;">
+  <div class="panel">
+    <h2>Register</h2>
+    <form method="post" action="/register">
+      <label>Username<input name="username" pattern="[a-z][a-z0-9_-]{2,31}" required></label>
+      <label>Password<input type="password" name="password" minlength="8" required></label>
+      <label>Confirm password<input type="password" name="password_confirm" minlength="8" required></label>
+      <button type="submit">Create account</button>
+    </form>
+  </div>
+
+  <div class="panel">
+    <h2>Log in</h2>
+    <form method="post" action="/login">
+      <label>Username<input name="username" required></label>
+      <label>Password<input type="password" name="password" required></label>
+      <button type="submit">Open dashboard</button>
+    </form>
+    <p class="muted">Student accounts can use the dashboard. Operator actions stay in the CLI.</p>
+    <p><code>ssh &lt;username&gt;@{{ app.host_label }}</code></p>
+  </div>
+</section>
+{% endblock %}

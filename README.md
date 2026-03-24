@@ -27,7 +27,7 @@ Inside the workshop shell, students use:
 ## Build the Image
 
 ```bash
-docker build -t linux-workshop .
+docker build -t linux-workshop ./user-container
 ```
 
 For a quick local run with the workshop shell:
@@ -56,17 +56,22 @@ their host username.
 1. Build the workshop image on the host:
 
 ```bash
-docker build -t linux-workshop .
+docker build -t linux-workshop ./user-container
 ```
 
 2. Install the host broker as root:
 
 ```bash
-sudo ./deploy/install-host-broker.sh --image linux-workshop
+sudo ./install-host-broker.sh --image linux-workshop
 ```
 
-Re-running the installer keeps the existing invite code unless you explicitly
-pass `--registration-code ...`.
+If it is already installed, the script exits. To refresh the existing install:
+
+```bash
+sudo ./install-host-broker.sh --reinstall --image linux-workshop
+```
+
+Reinstalling keeps the existing session secret.
 
 Optional flags:
 
@@ -78,9 +83,9 @@ Optional flags:
 - `--pids 256`
 - `--host-label your-server-or-ip`
 - `--registration-port 8088`
-- `--registration-code yourinvitecode`
+- `--reinstall`
 
-3. The installer starts a registration site and prints its invite code.
+3. The installer starts a registration site.
 
 Students visit:
 
@@ -88,19 +93,67 @@ Students visit:
 http://your-server:8088/
 ```
 
-They choose a username and password, enter the invite code, and the host login
-account is created automatically.
+They choose a username and password, and the host login account is created
+automatically. Each source IP can claim only one username through the
+self-service flow.
+
+The same site also provides:
+
+- a student dashboard where each student can reset only their own machine
+  after logging in and confirming their password
+
+Important: the website is for workshop convenience only. Do not use a real
+password or reuse a password from anywhere else. Passwords sent to the site can
+be read on the network.
+
+After install, the host also gets a `workshop-ops` command.
 
 4. If you want to create or reset an account manually from the server:
 
 ```bash
-sudo ./deploy/provision-student.sh student01 strongpassword
+sudo workshop-ops create-user student01 strongpassword
 ```
 
-5. Students connect with:
+5. To reset a student's machine without deleting the account:
+
+```bash
+sudo workshop-ops reset-machine student01
+```
+
+This removes the student's current container and archives it first. The next SSH
+login creates a fresh machine.
+
+6. To recoverably delete a student account from the server:
+
+```bash
+sudo workshop-ops delete-user student01
+```
+
+This archives the student's current machine first, then removes the host login
+and home directory.
+
+7. To restore a previously deleted student account from the latest archive:
+
+```bash
+sudo workshop-ops restore-user student01 newstrongpassword
+```
+
+8. To inspect current workshop users and machines:
+
+```bash
+sudo workshop-ops status
+```
+
+9. Students connect with:
 
 ```bash
 ssh student01@your-server
+```
+
+To remove the host integration without deleting workshop users or containers:
+
+```bash
+sudo ./uninstall-host-broker.sh
 ```
 
 ## What Happens on Login
@@ -118,8 +171,11 @@ ssh student01@your-server
 - student containers are not directly reachable from outside
 - host firewall rules can block all new outbound traffic from the workshop subnet
 - SSH forwarding features are disabled for the student host accounts
-- the registration website uses a shared invite code and simple password flow;
-  it is designed for workshop convenience, not high-security enrollment
+- the registration website uses one-claim-per-IP policy and host password
+  authentication for the student dashboard; it is designed for workshop
+  convenience, not high-security enrollment
+- students should use temporary workshop-only passwords because the website runs
+  over plain HTTP and credentials can be read on the network
 
 ## Reconnect Behavior
 
@@ -132,4 +188,4 @@ ssh student01@your-server
 - Docker installed and running
 - host OpenSSH server installed and managed by `systemd`
 - `iptables` available on the host
-- Python 3 available on the host for the registration service
+- Python 3 with `venv` support available on the host for the registration service

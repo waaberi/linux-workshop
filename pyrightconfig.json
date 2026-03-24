@@ -1,0 +1,10 @@
+{
+  "include": ["web-server"],
+  "stubPath": "web-server/stubs",
+  "executionEnvironments": [
+    {
+      "root": "web-server",
+      "extraPaths": ["web-server"]
+    }
+  ]
+}

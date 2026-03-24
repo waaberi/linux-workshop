@@ -1,0 +1,34 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<section class="panel">
+  <h1>Your machine</h1>
+  <p><code>ssh {{ record.username }}@{{ app.host_label }}</code></p>
+</section>
+
+<section class="grid three" style="margin-top: 16px;">
+  <div class="panel"><h2>Status</h2><p>{{ record.machine_status }}</p></div>
+  <div class="panel"><h2>Container</h2><p><code>{{ record.container_name }}</code></p></div>
+  <div class="panel"><h2>IP</h2><p><code>{{ record.machine_ip }}</code></p></div>
+</section>
+
+<section class="grid two" style="margin-top: 16px;">
+  <div class="panel">
+    <h2>Details</h2>
+    <p>Image: <code>{{ record.machine_image }}</code></p>
+    <p>Created: {{ record.machine_created }}</p>
+    <p>Archives: {{ record.archive_refs|length }}</p>
+    <p class="muted">Latest archive: {{ latest_archive }}</p>
+  </div>
+
+  <div class="panel">
+    <h2>Reset machine</h2>
+    <p>This archives and removes your current machine. Your account stays, and a fresh machine is created on your next SSH login.</p>
+    <form method="post" action="/machine/reset" onsubmit="return confirm('Archive and reset your machine?');">
+      <input type="hidden" name="csrf" value="{{ session.csrf }}">
+      <label>Confirm password<input type="password" name="password" autocomplete="current-password" required></label>
+      <button class="button-danger" type="submit">Archive and reset my machine</button>
+    </form>
+  </div>
+</section>
+{% endblock %}

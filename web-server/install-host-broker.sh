@@ -18,8 +18,10 @@ WORKSHOP_PIDS="256"
 WORKSHOP_HOST_LABEL="$(hostname -f 2>/dev/null || hostname)"
 WORKSHOP_REGISTRATION_BIND="0.0.0.0"
 WORKSHOP_REGISTRATION_PORT="8088"
-WORKSHOP_REGISTRATION_CODE="$(head -c 12 /dev/urandom | xxd -p)"
-REGISTRATION_CODE_EXPLICIT=0
+WORKSHOP_REGISTRATION_IP_LIMIT="1"
+WORKSHOP_SESSION_SECRET=""
+WORKSHOP_STATE_DB="/var/lib/workshop/registration.db"
+REINSTALL=0
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -33,7 +35,7 @@ while [ "$#" -gt 0 ]; do
         --host-label) WORKSHOP_HOST_LABEL="$2"; shift 2 ;;
         --registration-bind) WORKSHOP_REGISTRATION_BIND="$2"; shift 2 ;;
         --registration-port) WORKSHOP_REGISTRATION_PORT="$2"; shift 2 ;;
-        --registration-code) WORKSHOP_REGISTRATION_CODE="$2"; REGISTRATION_CODE_EXPLICIT=1; shift 2 ;;
+        --reinstall) REINSTALL=1; shift ;;
         *)
             echo "Unknown argument: $1" >&2
             exit 1
@@ -41,12 +43,40 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
+if [ "$REINSTALL" -ne 1 ] && {
+    [ -f /etc/systemd/system/workshop-registration.service ] ||
+    [ -d /usr/local/lib/workshop/web-server ] ||
+    [ -f /etc/ssh/sshd_config.d/workshop-broker.conf ];
+}; then
+    cat >&2 <<'EOF'
+Workshop host broker already appears to be installed.
+
+If you want to refresh or overwrite the current installation, rerun with:
+  sudo ./install-host-broker.sh --reinstall
+EOF
+    exit 1
+fi
+
 for cmd in docker iptables sshd systemctl python3; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
         echo "Required host command '$cmd' is missing." >&2
         exit 1
     fi
 done
+
+generate_session_secret() {
+    python3 - <<'PY'
+from __future__ import annotations
+
+import secrets
+
+print(secrets.token_hex(32))
+PY
+}
+
+if [ -z "$WORKSHOP_SESSION_SECRET" ]; then
+    WORKSHOP_SESSION_SECRET="$(generate_session_secret)"
+fi
 
 manage_ssh_service() {
     if systemctl list-unit-files sshd.service >/dev/null 2>&1; then
@@ -63,18 +93,35 @@ manage_ssh_service() {
 
 groupadd -f workshop-students
 
-if [ -f /etc/workshop/registration.env ] && [ "$REGISTRATION_CODE_EXPLICIT" -eq 0 ]; then
-    existing_code=$(sed -n 's/^WORKSHOP_REGISTRATION_CODE=//p' /etc/workshop/registration.env | tail -n 1)
-    if [ -n "$existing_code" ]; then
-        WORKSHOP_REGISTRATION_CODE="$existing_code"
+if [ -f /etc/workshop/registration.env ]; then
+    existing_secret=$(sed -n 's/^WORKSHOP_SESSION_SECRET=//p' /etc/workshop/registration.env | tail -n 1)
+    if [ -n "$existing_secret" ]; then
+        WORKSHOP_SESSION_SECRET="$existing_secret"
     fi
 fi
 
-install -d -m 755 /usr/local/lib/workshop /etc/workshop /etc/ssh/sshd_config.d
+install -d -m 755 /usr/local/lib/workshop /usr/local/lib/workshop/web-server /usr/local/lib/workshop/web-server/views /etc/workshop /etc/ssh/sshd_config.d /var/lib/workshop
 install -m 755 "$SCRIPT_DIR/workshop-login.sh" /usr/local/lib/workshop/workshop-login.sh
-install -m 700 "$SCRIPT_DIR/workshop-login-root.sh" /usr/local/lib/workshop/workshop-login-root.sh
-install -m 700 "$SCRIPT_DIR/provision-student.sh" /usr/local/lib/workshop/provision-student.sh
-install -m 755 "$SCRIPT_DIR/workshop-register.py" /usr/local/lib/workshop/workshop-register.py
+install -m 700 "$SCRIPT_DIR/ops.py" /usr/local/lib/workshop/web-server/ops.py
+install -m 755 "$SCRIPT_DIR/workshop-register.sh" /usr/local/lib/workshop/web-server/workshop-register.sh
+install -m 644 "$SCRIPT_DIR/requirements.txt" /usr/local/lib/workshop/web-server/requirements.txt
+install -m 644 "$SCRIPT_DIR/app.py" /usr/local/lib/workshop/web-server/app.py
+install -m 644 "$SCRIPT_DIR/model.py" /usr/local/lib/workshop/web-server/model.py
+install -m 644 "$SCRIPT_DIR/views/layout.html" /usr/local/lib/workshop/web-server/views/layout.html
+install -m 644 "$SCRIPT_DIR/views/home.html" /usr/local/lib/workshop/web-server/views/home.html
+install -m 644 "$SCRIPT_DIR/views/student_dashboard.html" /usr/local/lib/workshop/web-server/views/student_dashboard.html
+install -m 644 "$SCRIPT_DIR/views/not_found.html" /usr/local/lib/workshop/web-server/views/not_found.html
+
+cat > /usr/local/bin/workshop-ops <<'EOF'
+#!/bin/bash
+set -euo pipefail
+exec /usr/local/lib/workshop/web-server/ops.py "$@"
+EOF
+chmod 755 /usr/local/bin/workshop-ops
+
+python3 -m venv /usr/local/lib/workshop/web-server/.venv
+/usr/local/lib/workshop/web-server/.venv/bin/pip install --upgrade pip >/dev/null
+/usr/local/lib/workshop/web-server/.venv/bin/pip install --requirement /usr/local/lib/workshop/web-server/requirements.txt >/dev/null
 
 cat > /etc/workshop/broker.env <<EOF
 WORKSHOP_IMAGE=${WORKSHOP_IMAGE}
@@ -91,14 +138,16 @@ cat > /etc/workshop/registration.env <<EOF
 WORKSHOP_HOST_LABEL=${WORKSHOP_HOST_LABEL}
 WORKSHOP_REGISTRATION_BIND=${WORKSHOP_REGISTRATION_BIND}
 WORKSHOP_REGISTRATION_PORT=${WORKSHOP_REGISTRATION_PORT}
-WORKSHOP_REGISTRATION_CODE=${WORKSHOP_REGISTRATION_CODE}
+WORKSHOP_REGISTRATION_IP_LIMIT=${WORKSHOP_REGISTRATION_IP_LIMIT}
+WORKSHOP_SESSION_SECRET=${WORKSHOP_SESSION_SECRET}
+WORKSHOP_STATE_DB=${WORKSHOP_STATE_DB}
 WORKSHOP_REGISTRATION_TITLE=Workshop Login Registration
 WORKSHOP_REGISTRATION_MESSAGE=Claim a username and password for the workshop.
 EOF
 chmod 600 /etc/workshop/registration.env
 
 cat > /etc/sudoers.d/workshop-broker <<'EOF'
-%workshop-students ALL=(root) NOPASSWD: /usr/local/lib/workshop/workshop-login-root.sh
+%workshop-students ALL=(root) NOPASSWD: /usr/local/lib/workshop/web-server/ops.py login-shell
 EOF
 chmod 440 /etc/sudoers.d/workshop-broker
 
@@ -123,7 +172,9 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 /usr/local/lib/workshop/workshop-register.py
+EnvironmentFile=/etc/workshop/registration.env
+WorkingDirectory=/usr/local/lib/workshop/web-server
+ExecStart=/usr/local/lib/workshop/web-server/workshop-register.sh
 Restart=always
 RestartSec=2
 
@@ -153,9 +204,12 @@ Image:   ${WORKSHOP_IMAGE}
 Network: ${WORKSHOP_NETWORK} (${WORKSHOP_SUBNET})
 
 Next steps:
-  1. Build the image: docker build -t ${WORKSHOP_IMAGE} .
-  2. Optional manual user creation: sudo ./deploy/provision-student.sh <username> <password>
-  3. Registration site: http://${WORKSHOP_HOST_LABEL}:${WORKSHOP_REGISTRATION_PORT}/
-  4. Invite code: ${WORKSHOP_REGISTRATION_CODE}
-  5. Students connect with: ssh <username>@${WORKSHOP_HOST_LABEL}
+  1. Build the image: docker build -t ${WORKSHOP_IMAGE} ./user-container
+  2. Optional manual user creation: sudo workshop-ops create-user <username> <password>
+  3. Reset a machine: sudo workshop-ops reset-machine <username>
+  4. Recoverable user deletion: sudo workshop-ops delete-user <username>
+  5. Restore a deleted user: sudo workshop-ops restore-user <username> <password>
+  6. Current workshop status: sudo workshop-ops status
+  7. Registration site: http://${WORKSHOP_HOST_LABEL}:${WORKSHOP_REGISTRATION_PORT}/
+  8. Students connect with: ssh <username>@${WORKSHOP_HOST_LABEL}
 EOF

@@ -13,8 +13,8 @@ class FlagHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         flag = FLAG_FILE.read_text(encoding="utf-8").strip()
         self.wfile.write(f"{flag}\n".encode())
-
-    def log_message(self, format, *args):
+        
+    def log_message(self, format: str, *args: object) -> None:
         pass  # Suppress access logs to keep terminal clean
 
 
@@ -23,7 +23,7 @@ if __name__ == "__main__":
         print(f"Usage: {sys.argv[0]} <config-file>")
         sys.exit(1)
 
-    config = {}
+    config: dict[str, str] = {}
     for line in Path(sys.argv[1]).read_text(encoding="utf-8").splitlines():
         if not line.strip() or "=" not in line:
             continue
