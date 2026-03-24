@@ -106,6 +106,23 @@ write_secure_token() {
     chmod 600 "$2"
 }
 
+verify_file_match() {
+    local id="$1" flag="$2" file="$3" expected="$4"
+    local empty_hint="$5" wrong_hint="$6"
+    local actual
+
+    actual=$(cat "$HOME/$file" 2>/dev/null)
+    if [ -z "$actual" ]; then
+        fail "File ~/$file not found or is empty."
+        hint "$empty_hint"
+    elif [ "$actual" = "$expected" ]; then
+        pass "$id" "$flag"
+    else
+        fail "~/$file doesn't contain the correct output."
+        hint "$wrong_hint"
+    fi
+}
+
 write_getflag_script() {
     local token
 
@@ -335,17 +352,10 @@ EOF
 # ============================================================
 
 verify_2_2() {
-    EXPECTED=$(cat "$HOME/challenges/files/pieces"/part*.txt 2>/dev/null)
-    ACTUAL=$(cat "$HOME/pieces.txt" 2>/dev/null)
-    if [ -z "$ACTUAL" ]; then
-        fail "File ~/pieces.txt not found or is empty."
-        hint "Concatenate all the part files and redirect the output to ~/pieces.txt."
-    elif [ "$ACTUAL" = "$EXPECTED" ]; then
-        pass "2.2" "cat_concat_master"
-    else
-        fail "~/pieces.txt doesn't contain the correct concatenation."
-        hint "Make sure you're concatenating all 20 files in order."
-    fi
+    verify_file_match "2.2" "cat_concat_master" "pieces.txt" \
+        "$(cat "$HOME/challenges/files/pieces"/part*.txt 2>/dev/null)" \
+        "Concatenate all the part files and redirect the output to ~/pieces.txt." \
+        "Make sure you're concatenating all 20 files in order."
 }
 
 reset_2_2() {
@@ -367,17 +377,10 @@ reset_2_2() {
 # ============================================================
 
 verify_2_3() {
-    EXPECTED=$(sed -n '6743p' "$HOME/challenges/files/server.log")
-    ACTUAL=$(cat "$HOME/line.txt" 2>/dev/null)
-    if [ -z "$ACTUAL" ]; then
-        fail "File ~/line.txt not found or is empty."
-        hint "Extract the line and save it to a file using output redirection (>)."
-    elif [ "$ACTUAL" = "$EXPECTED" ]; then
-        pass "2.3" "log_line_6743"
-    else
-        fail "~/line.txt doesn't contain the correct line."
-        hint "Make sure you're extracting exactly line 6,743 — not the lines around it."
-    fi
+    verify_file_match "2.3" "log_line_6743" "line.txt" \
+        "$(sed -n '6743p' "$HOME/challenges/files/server.log")" \
+        "Extract the line and save it to a file using output redirection (>)." \
+        "Make sure you're extracting exactly line 6,743 — not the lines around it."
 }
 
 reset_2_3() {
@@ -481,17 +484,10 @@ reset_3_3() {
 # ============================================================
 
 verify_4_1() {
-    EXPECTED=$("$HOME/challenges/pipes/step1" | "$HOME/challenges/pipes/step2" | "$HOME/challenges/pipes/step3" 2>/dev/null)
-    ACTUAL=$(cat "$HOME/pipeline.txt" 2>/dev/null)
-    if [ -z "$ACTUAL" ]; then
-        fail "File ~/pipeline.txt not found or is empty."
-        hint "Pipe the three programs together and redirect the final output to a file."
-    elif [ "$ACTUAL" = "$EXPECTED" ]; then
-        pass "4.1" "pipe_it_all"
-    else
-        fail "~/pipeline.txt doesn't contain the correct output."
-        hint "Make sure you pipe all three in the right order: step1 | step2 | step3."
-    fi
+    verify_file_match "4.1" "pipe_it_all" "pipeline.txt" \
+        "$("$HOME/challenges/pipes/step1" | "$HOME/challenges/pipes/step2" | "$HOME/challenges/pipes/step3" 2>/dev/null)" \
+        "Pipe the three programs together and redirect the final output to a file." \
+        "Make sure you pipe all three in the right order: step1 | step2 | step3."
 }
 
 reset_4_1() {
@@ -506,17 +502,10 @@ reset_4_1() {
 # ============================================================
 
 verify_4_2() {
-    EXPECTED=$(grep "secret" "$HOME/challenges/pipes/access.log" 2>/dev/null)
-    ACTUAL=$(cat "$HOME/grep_result.txt" 2>/dev/null)
-    if [ -z "$ACTUAL" ]; then
-        fail "File ~/grep_result.txt not found or is empty."
-        hint "Use grep to find the unusual line, then redirect the output to a file."
-    elif [ "$ACTUAL" = "$EXPECTED" ]; then
-        pass "4.2" "grep_the_logs"
-    else
-        fail "~/grep_result.txt doesn't contain the right line."
-        hint "Look at what 'normal' lines have in common. Grep for something different."
-    fi
+    verify_file_match "4.2" "grep_the_logs" "grep_result.txt" \
+        "$(grep "secret" "$HOME/challenges/pipes/access.log" 2>/dev/null)" \
+        "Use grep to find the unusual line, then redirect the output to a file." \
+        "Look at what 'normal' lines have in common. Grep for something different."
 }
 
 reset_4_2() {
@@ -593,17 +582,10 @@ reset_5_1() {
 # ============================================================
 
 verify_5_2() {
-    EXPECTED=$(grep -r "WORKSHOP_TOKEN" "$HOME/challenges/search/data/" 2>/dev/null)
-    ACTUAL=$(cat "$HOME/token.txt" 2>/dev/null)
-    if [ -z "$ACTUAL" ]; then
-        fail "File ~/token.txt not found or is empty."
-        hint "Use grep to search recursively, then redirect the output to ~/token.txt."
-    elif [ "$ACTUAL" = "$EXPECTED" ]; then
-        pass "5.2" "recursive_grep"
-    else
-        fail "~/token.txt doesn't contain the correct grep output."
-        hint "Search for the exact string 'WORKSHOP_TOKEN' across all files in the directory."
-    fi
+    verify_file_match "5.2" "recursive_grep" "token.txt" \
+        "$(grep -r "WORKSHOP_TOKEN" "$HOME/challenges/search/data/" 2>/dev/null)" \
+        "Use grep to search recursively, then redirect the output to ~/token.txt." \
+        "Search for the exact string 'WORKSHOP_TOKEN' across all files in the directory."
 }
 
 reset_5_2() {
