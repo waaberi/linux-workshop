@@ -70,5 +70,6 @@ export HOME=/home/ieee
 export USER=ieee
 export LOGNAME=ieee
 export SHELL=/bin/bash
+/usr/local/bin/welcome
 exec runuser --preserve-environment -u ieee -- bash -l
 '
