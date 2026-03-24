@@ -101,6 +101,11 @@ generate_hidden_port() {
     printf '%s\n' "$((RANDOM % 800 + 9100))"
 }
 
+write_secure_token() {
+    generate_token "$1" | tee "$2"
+    chmod 600 "$2"
+}
+
 write_getflag_script() {
     local token
 
@@ -693,9 +698,7 @@ reset_6_1() {
     if [ -n "$CURRENT" ]; then
         pkill -f "^${CURRENT} 99999$" > /dev/null 2>&1 || true
     fi
-    NEXT=$(generate_token SPY_)
-    printf '%s\n' "$NEXT" > "$SPY_NAME_FILE"
-    chmod 600 "$SPY_NAME_FILE"
+    NEXT=$(write_secure_token SPY_ "$SPY_NAME_FILE")
     start_spy_process "$NEXT"
     rm -f "$HOME/spy_name.txt"
     set_log_marker "6.1"
@@ -755,11 +758,10 @@ verify_6_3() {
 }
 
 reset_6_3() {
-    WORKER_SECRET=$(generate_token PROC_)
+    write_secure_token PROC_ "$WORKER_SECRET_FILE" > /dev/null
     WORKER_SLOT=$((RANDOM % 4 + 1))
-    printf '%s\n' "$WORKER_SECRET" > "$WORKER_SECRET_FILE"
     printf '%s\n' "$WORKER_SLOT" > "$WORKER_SLOT_FILE"
-    chmod 600 "$WORKER_SECRET_FILE" "$WORKER_SLOT_FILE"
+    chmod 600 "$WORKER_SLOT_FILE"
     stop_worker_processes
     start_worker_processes
     rm -f "$HOME/worker_secret.txt"
@@ -800,9 +802,7 @@ verify_7_1() {
 
 reset_7_1() {
     if [ ! -f "$SECRET_FLAG_FILE" ]; then
-        SECRET_FLAG=$(generate_token ENV_)
-        printf '%s\n' "$SECRET_FLAG" > "$SECRET_FLAG_FILE"
-        chmod 600 "$SECRET_FLAG_FILE"
+        write_secure_token ENV_ "$SECRET_FLAG_FILE" > /dev/null
     fi
     write_secret_env_config
     rm -f "$HOME/secret_flag.txt"
@@ -844,9 +844,7 @@ verify_7_2() {
 }
 
 reset_7_2() {
-    PATH_FLAG=$(generate_token PATH_)
-    printf '%s\n' "$PATH_FLAG" > "$PATH_FLAG_FILE"
-    chmod 600 "$PATH_FLAG_FILE"
+    write_secure_token PATH_ "$PATH_FLAG_FILE" > /dev/null
     write_getflag_script
     rm -f "$HOME/path_flag.txt"
     set_log_marker "7.2"
@@ -1057,9 +1055,7 @@ verify_9_2() {
 }
 
 reset_9_2() {
-    WEB_FLAG=$(generate_token WEB_)
-    printf '%s\n' "$WEB_FLAG" > "$WEB_FLAG_FILE"
-    chmod 600 "$WEB_FLAG_FILE"
+    write_secure_token WEB_ "$WEB_FLAG_FILE" > /dev/null
     restart_network_services
     rm -f "$HOME/web_flag.txt"
     set_log_marker "9.2"
@@ -1106,11 +1102,9 @@ verify_9_3() {
 }
 
 reset_9_3() {
-    HIDDEN_FLAG=$(generate_token HIDDEN_)
-    HIDDEN_PORT=$(generate_hidden_port)
-    printf '%s\n' "$HIDDEN_FLAG" > "$HIDDEN_FLAG_FILE"
-    printf '%s\n' "$HIDDEN_PORT" > "$HIDDEN_PORT_FILE"
-    chmod 600 "$HIDDEN_FLAG_FILE" "$HIDDEN_PORT_FILE"
+    write_secure_token HIDDEN_ "$HIDDEN_FLAG_FILE" > /dev/null
+    generate_hidden_port > "$HIDDEN_PORT_FILE"
+    chmod 600 "$HIDDEN_PORT_FILE"
     restart_network_services
     rm -f "$HOME/hidden_port.txt" "$HOME/hidden_flag.txt"
     set_log_marker "9.3"

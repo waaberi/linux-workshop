@@ -24,6 +24,11 @@ generate_hidden_port() {
     printf '%s\n' "$((RANDOM % 800 + 9100))"
 }
 
+write_secure_token() {
+    generate_token "$1" | tee "$2"
+    chmod 600 "$2"
+}
+
 write_getflag_script() {
     local token
 
@@ -104,10 +109,10 @@ start_network_services() {
 # ============================================================
 
 if [ ! -f /opt/.initialized ]; then
-    NEEDLE_TOKEN="NEEDLE_$(head -c 6 /dev/urandom | xxd -p)"
+    NEEDLE_TOKEN=$(generate_token NEEDLE_)
     sed -i "s/__NEEDLE_TOKEN__/$NEEDLE_TOKEN/" /home/ieee/challenges/files/server.log
 
-    PIECES_TOKEN="PIECES_$(head -c 6 /dev/urandom | xxd -p)"
+    PIECES_TOKEN=$(generate_token PIECES_)
     sed -i "s/__PIECES_TOKEN__/$PIECES_TOKEN/" /home/ieee/challenges/files/pieces/part13.txt
 
     # 3.3 — randomize which audit file gets 600
@@ -124,16 +129,14 @@ if [ ! -f /opt/.initialized ]; then
     chown ieee:ieee "$AUDIT_DIR"/report*.txt
 
     # 4.1 — randomize grep token
-    GREP_TOKEN="GREP_$(head -c 6 /dev/urandom | xxd -p)"
+    GREP_TOKEN=$(generate_token GREP_)
     sed -i "s/__GREP_TOKEN__/$GREP_TOKEN/" /home/ieee/challenges/pipes/access.log
 
     # 4.2 — randomize stderr token
-    NOISY_TOKEN="STDERR_$(head -c 6 /dev/urandom | xxd -p)"
-    echo "$NOISY_TOKEN" > /opt/.noisy_token
-    chmod 600 /opt/.noisy_token
+    write_secure_token STDERR_ /opt/.noisy_token
 
     # 4.3 — randomize pipeline token
-    PIPE_TOKEN="PIPE_$(head -c 6 /dev/urandom | xxd -p)"
+    PIPE_TOKEN=$(generate_token PIPE_)
     echo "$PIPE_TOKEN" | rev | base64 > /opt/.pipe_token_encoded
     chmod 600 /opt/.pipe_token_encoded
 
@@ -141,68 +144,46 @@ if [ ! -f /opt/.initialized ]; then
     SEARCH_DIR="/home/ieee/challenges/search/data"
     SEARCH_RAW=$((RANDOM % 30 + 1))
     SEARCH_NUM=$(printf '%02d' "$SEARCH_RAW")
-    SEARCH_TOKEN="SEARCH_$(head -c 6 /dev/urandom | xxd -p)"
+    SEARCH_TOKEN=$(generate_token SEARCH_)
     printf 'Log entry %d: System check passed.\nWORKSHOP_TOKEN: %s\nEnd of log.\n' \
         "$SEARCH_RAW" "$SEARCH_TOKEN" > "$SEARCH_DIR/file_${SEARCH_NUM}.txt"
     chown ieee:ieee "$SEARCH_DIR/file_${SEARCH_NUM}.txt"
 
-    SPY_NAME=$(generate_token SPY_)
-    printf '%s\n' "$SPY_NAME" > "$SPY_NAME_FILE"
-    chmod 600 "$SPY_NAME_FILE"
+    write_secure_token SPY_ "$SPY_NAME_FILE"
 
-    WORKER_SECRET=$(generate_token PROC_)
-    WORKER_SLOT=$((RANDOM % 4 + 1))
-    printf '%s\n' "$WORKER_SECRET" > "$WORKER_SECRET_FILE"
-    printf '%s\n' "$WORKER_SLOT" > "$WORKER_SLOT_FILE"
-    chmod 600 "$WORKER_SECRET_FILE" "$WORKER_SLOT_FILE"
+    write_secure_token PROC_ "$WORKER_SECRET_FILE"
+    printf '%s\n' "$((RANDOM % 4 + 1))" > "$WORKER_SLOT_FILE"
+    chmod 600 "$WORKER_SLOT_FILE"
 
-    SECRET_FLAG=$(generate_token ENV_)
-    printf '%s\n' "$SECRET_FLAG" > "$SECRET_FLAG_FILE"
-    chmod 600 "$SECRET_FLAG_FILE"
-
-    PATH_FLAG=$(generate_token PATH_)
-    printf '%s\n' "$PATH_FLAG" > "$PATH_FLAG_FILE"
-    chmod 600 "$PATH_FLAG_FILE"
+    write_secure_token ENV_ "$SECRET_FLAG_FILE"
+    write_secure_token PATH_ "$PATH_FLAG_FILE"
 
     randomize_big_file
 
-    WEB_FLAG=$(generate_token WEB_)
-    printf '%s\n' "$WEB_FLAG" > "$WEB_FLAG_FILE"
-    chmod 600 "$WEB_FLAG_FILE"
-
-    HIDDEN_FLAG=$(generate_token HIDDEN_)
-    HIDDEN_PORT=$(generate_hidden_port)
-    printf '%s\n' "$HIDDEN_FLAG" > "$HIDDEN_FLAG_FILE"
-    printf '%s\n' "$HIDDEN_PORT" > "$HIDDEN_PORT_FILE"
-    chmod 600 "$HIDDEN_FLAG_FILE" "$HIDDEN_PORT_FILE"
+    write_secure_token WEB_ "$WEB_FLAG_FILE"
+    write_secure_token HIDDEN_ "$HIDDEN_FLAG_FILE"
+    generate_hidden_port > "$HIDDEN_PORT_FILE"
+    chmod 600 "$HIDDEN_PORT_FILE"
 
     touch /opt/.initialized
 fi
 
 if [ ! -f "$SPY_NAME_FILE" ]; then
-    SPY_NAME=$(generate_token SPY_)
-    printf '%s\n' "$SPY_NAME" > "$SPY_NAME_FILE"
-    chmod 600 "$SPY_NAME_FILE"
+    write_secure_token SPY_ "$SPY_NAME_FILE"
 fi
 
 if [ ! -f "$WORKER_SECRET_FILE" ] || [ ! -f "$WORKER_SLOT_FILE" ]; then
-    WORKER_SECRET=$(generate_token PROC_)
-    WORKER_SLOT=$((RANDOM % 4 + 1))
-    printf '%s\n' "$WORKER_SECRET" > "$WORKER_SECRET_FILE"
-    printf '%s\n' "$WORKER_SLOT" > "$WORKER_SLOT_FILE"
-    chmod 600 "$WORKER_SECRET_FILE" "$WORKER_SLOT_FILE"
+    write_secure_token PROC_ "$WORKER_SECRET_FILE"
+    printf '%s\n' "$((RANDOM % 4 + 1))" > "$WORKER_SLOT_FILE"
+    chmod 600 "$WORKER_SLOT_FILE"
 fi
 
 if [ ! -f "$SECRET_FLAG_FILE" ]; then
-    SECRET_FLAG=$(generate_token ENV_)
-    printf '%s\n' "$SECRET_FLAG" > "$SECRET_FLAG_FILE"
-    chmod 600 "$SECRET_FLAG_FILE"
+    write_secure_token ENV_ "$SECRET_FLAG_FILE"
 fi
 
 if [ ! -f "$PATH_FLAG_FILE" ]; then
-    PATH_FLAG=$(generate_token PATH_)
-    printf '%s\n' "$PATH_FLAG" > "$PATH_FLAG_FILE"
-    chmod 600 "$PATH_FLAG_FILE"
+    write_secure_token PATH_ "$PATH_FLAG_FILE"
 fi
 
 if [ ! -f "$BIGFILE_PATH_FILE" ] || [ ! -f "$(cat "$BIGFILE_PATH_FILE" 2>/dev/null)" ]; then
@@ -210,17 +191,13 @@ if [ ! -f "$BIGFILE_PATH_FILE" ] || [ ! -f "$(cat "$BIGFILE_PATH_FILE" 2>/dev/nu
 fi
 
 if [ ! -f "$WEB_FLAG_FILE" ]; then
-    WEB_FLAG=$(generate_token WEB_)
-    printf '%s\n' "$WEB_FLAG" > "$WEB_FLAG_FILE"
-    chmod 600 "$WEB_FLAG_FILE"
+    write_secure_token WEB_ "$WEB_FLAG_FILE"
 fi
 
 if [ ! -f "$HIDDEN_FLAG_FILE" ] || [ ! -f "$HIDDEN_PORT_FILE" ]; then
-    HIDDEN_FLAG=$(generate_token HIDDEN_)
-    HIDDEN_PORT=$(generate_hidden_port)
-    printf '%s\n' "$HIDDEN_FLAG" > "$HIDDEN_FLAG_FILE"
-    printf '%s\n' "$HIDDEN_PORT" > "$HIDDEN_PORT_FILE"
-    chmod 600 "$HIDDEN_FLAG_FILE" "$HIDDEN_PORT_FILE"
+    write_secure_token HIDDEN_ "$HIDDEN_FLAG_FILE"
+    generate_hidden_port > "$HIDDEN_PORT_FILE"
+    chmod 600 "$HIDDEN_PORT_FILE"
 fi
 
 write_getflag_script
