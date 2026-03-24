@@ -1,0 +1,393 @@
+================================================================================
+  LINUX FUNDAMENTALS WORKSHOP — CHALLENGES
+  IEEE uOttawa
+================================================================================
+
+  How it works:
+  - Each challenge teaches a Linux concept.
+  - Do the task, then run: verify <number>
+  - To retry from a clean state, run: reset <number>
+  - To see overall progress, run: status
+  - To show the workshop welcome message again, run: welcome
+  - Difficulty: [E] Easy  [M] Medium  [H] Hard (bonus)
+
+  Tip: Use 'man <command>' or '<command> --help' if you get stuck.
+
+================================================================================
+
+  CONCEPT 1 — FILE SYSTEM NAVIGATION
+  Commands: pwd, ls, cd
+
+--------------------------------------------------------------------------------
+
+  [E] Challenge 1.1 — Where Am I?
+
+      Run 'pwd' to see your current working directory.
+      Then run: verify 1.1
+
+  [M] Challenge 1.2 — The Labyrinth
+
+      A file called 'flag.txt' is hidden somewhere inside ~/labyrinth/.
+      The directory has several levels of subfolders — some are dead ends.
+      Navigate through them using 'cd' and 'ls' to find and read the file.
+
+      Then run: verify 1.2
+
+  [H] Challenge 1.3 — Broken Link
+
+      The directory ~/links/ contains 5 symbolic links pointing to files
+      in ~/links/targets/. One of the links is broken — it points to a
+      file that doesn't exist.
+
+      Find the broken link and fix it so it points to the correct target.
+
+      Hint: 'ls -l' reveals where each symlink points. A broken link
+            points somewhere that doesn't exist — can you recreate it?
+
+      Then run: verify 1.3
+
+================================================================================
+
+  CONCEPT 2 — FILE OPERATIONS
+  Commands: nano, cat, head, tail, less
+
+--------------------------------------------------------------------------------
+
+  [E] Challenge 2.1 — Edit a Config
+
+      The file ~/challenges/files/config.txt has a setting called 'mode'
+      that is currently set to 'off'. Open the file in a text editor and
+      change it to 'on'.
+
+      Then run: verify 2.1
+
+  [M] Challenge 2.2 — Piece It Together
+
+      In ~/challenges/files/pieces/ there are 20 files named part01.txt
+      through part20.txt. One of them contains a unique token.
+      Concatenate them all in order and save the output to ~/pieces.txt.
+
+      Hint: cat can accept multiple files at once. Shell wildcards can
+            match files in order. Use redirection to save the output.
+
+      Then run: verify 2.2
+
+  [H] Challenge 2.3 — Needle in a Log
+
+      The file ~/challenges/files/server.log has 10,000 lines.
+      There's something interesting on line 6,743. Extract just that
+      line and save it to ~/line.txt.
+
+      Hint: 'head' shows the first N lines of a file, 'tail' shows the last N.
+            What happens if you combine them with a pipe and redirect the output?
+
+      Then run: verify 2.3
+
+================================================================================
+
+  CONCEPT 3 — FILE PERMISSIONS
+  Commands: chmod, ls -l
+
+--------------------------------------------------------------------------------
+
+  [E] Challenge 3.1 — Make It Run
+
+      The script ~/challenges/perms/show_flag.sh will print something,
+      but it's not executable. Fix that and run it.
+
+      Hint: chmod controls file permissions. You need to add the
+            execute permission for this script to run.
+
+      Then run: verify 3.1
+
+  [M] Challenge 3.2 — Locked Out
+
+      The file ~/challenges/perms/classified.txt has permissions set to 000.
+      That means nobody can read, write, or execute it.
+      Change its permissions so you can read it.
+
+      Hint: You own the file, so you can change its permissions with chmod.
+            Think about which permission you need to add: read, write, or execute?
+
+      Then run: verify 3.2
+
+  [H] Challenge 3.3 — Permission Audit
+
+      The directory ~/challenges/perms/audit/ contains several files.
+      Each has different permissions. One file has permissions set to
+      exactly 600 (-rw-------). That file contains a special message.
+
+      Use 'ls -l' to inspect the permissions of each file, figure out
+      which one matches 600, and read it.
+
+      Hint: Understand the permission string that 'ls -l' shows. Each
+            rwx triplet represents a different user class (owner/group/other).
+            Which pattern has only the owner able to read and write?
+
+      Then run: verify 3.3
+
+================================================================================
+
+  CONCEPT 4 — STREAMS & PIPING
+  Commands: grep, |, >, 2>
+
+--------------------------------------------------------------------------------
+
+  [E] Challenge 4.1 — The Pipeline
+
+      Three programs exist in ~/challenges/pipes/:
+        step1, step2, step3
+
+      Pipe them together in order: step1 -> step2 -> step3
+      Save the final output to ~/pipeline.txt.
+
+      Hint: The pipe operator (|) connects one program's output to
+            the next program's input. You can chain multiple pipes.
+
+      Then run: verify 4.1
+
+  [M] Challenge 4.2 — Grep the Logs
+
+      The file ~/challenges/pipes/access.log has thousands of lines.
+      Most are normal web requests. One line stands out from the rest.
+      Use grep to find it and save the result to ~/grep_result.txt.
+
+      Hint: Skim a few lines of the file to see what "normal" looks like.
+            Then use grep to search for anything that breaks that pattern.
+
+      Then run: verify 4.2
+
+  [H] Challenge 4.3 — Noisy Program
+
+      Run the program: ~/challenges/pipes/noisy
+      It prints a LOT of junk to your screen. But there's a message
+      hidden in stderr, not stdout.
+
+      Redirect the stderr output to ~/errors.txt to capture it.
+
+      Hint: Programs write to two output streams: stdout and stderr.
+            Redirection operators let you send each stream to different
+            places. What if you silenced one stream to reveal the other?
+
+      Then run: verify 4.3
+
+================================================================================
+
+  CONCEPT 5 — FINDING FILES
+  Commands: find, grep -r
+
+--------------------------------------------------------------------------------
+
+  [E] Challenge 5.1 — Find the Big File
+
+      The directory ~/challenges/search/files/ contains several small files
+      scattered across subdirectories. One file is unusually large (over 100K).
+      Use 'find' to locate it and save its path to ~/bigfile.txt.
+
+      Hint: The 'find' command can filter files by size.
+
+      Then run: verify 5.1
+
+  [M] Challenge 5.2 — Search Inside Files
+
+      Somewhere in ~/challenges/search/data/ there's a file containing
+      the text "WORKSHOP_TOKEN". Use grep to search through all the files
+      and find which one has it. Save the matching line to ~/token.txt.
+
+      Hint: grep can search recursively through all files in a directory.
+
+      Then run: verify 5.2
+
+  [H] Challenge 5.3 — Recent Changes
+
+      The directory ~/challenges/search/configs/ has several .conf files.
+      Only the ones modified recently (within the last 7 days) are relevant.
+      Find them and save their paths to ~/recent.txt.
+
+      Hint: The 'find' command has an option to filter by modification time.
+            Check 'man find' and look for -mtime.
+
+      Then run: verify 5.3
+
+================================================================================
+
+  CONCEPT 6 — PROCESS MANAGEMENT
+  Commands: ps, kill, top
+
+--------------------------------------------------------------------------------
+
+  [E] Challenge 6.1 — Spy on Processes
+
+      A background process is running on this system with an unusual name.
+      Use 'ps' to find it, then save just its name to ~/spy_name.txt.
+
+      Hint: Save only the unusual process name, not the PID or the full line.
+
+      Then run: verify 6.1
+
+  [M] Challenge 6.2 — Stop the Hog
+
+      A process called 'cpu_hog' is eating CPU cycles. Find its PID and
+      kill it.
+
+      Hint: Use 'ps' to list processes and find the PID. Once you have
+            the PID, the 'kill' command can stop a process.
+
+      Then run: verify 6.2
+
+  [H] Challenge 6.3 — Inside /proc
+
+      Several 'worker' processes are running in the background.
+      One of them has a secret hidden in its environment.
+      Find the right PID, read /proc/<PID>/environ to reveal it, then save
+      just the secret value to ~/worker_secret.txt.
+
+      Hint: Every running process has a directory in /proc/ named by its PID.
+            Inside each one is an 'environ' file showing its environment.
+            First, find the worker PIDs. Then explore their /proc entries.
+            The data is null-separated, so converting \0 to newlines can help.
+            Save only the secret value, not the full environ output.
+
+      Then run: verify 6.3
+
+================================================================================
+
+  CONCEPT 7 — ENVIRONMENT VARIABLES & PATH
+  Commands: printenv, export, echo $VAR
+
+--------------------------------------------------------------------------------
+
+  [E] Challenge 7.1 — Hidden in the Environment
+
+      A variable called SECRET_FLAG is set in the environment.
+      Use 'printenv' or 'echo' to find its value, then save just the value
+      to ~/secret_flag.txt.
+
+      Hint: Save only the value, not 'SECRET_FLAG=' or the full command output.
+
+      Then run: verify 7.1
+
+  [M] Challenge 7.2 — Extend Your PATH
+
+      There's a command called 'getflag' in ~/challenges/path/bin/.
+      Try running 'getflag' — it won't work because that directory
+      isn't in your PATH.
+
+      Add the directory to your PATH, run getflag, and save its output to
+      ~/path_flag.txt.
+
+      Hint: The PATH variable is a colon-separated list of directories
+            the shell searches for commands. You can append to it with export.
+            Save only the command output, not the command itself.
+
+      Then run: verify 7.2
+
+  [H] Challenge 7.3 — Customize Your Shell
+
+      Edit your ~/.bashrc file and add a custom alias called 'hello'
+      that prints exactly: Hello, Linux!
+
+      After editing, reload the file with 'source ~/.bashrc',
+      then run 'hello' to test it.
+
+      Hint: The 'alias' command lets you define shortcut names for commands.
+            ~/.bashrc runs every time a new shell starts — changes there
+            persist, but you need to reload the file for them to take effect.
+
+      Then run: verify 7.3
+
+================================================================================
+
+  CONCEPT 8 — BASH SCRIPTING
+  Commands: nano, chmod +x, bash, $1
+
+--------------------------------------------------------------------------------
+
+  [E] Challenge 8.1 — Your First Script
+
+      Create a script called ~/myscript.sh that prints: Hello, World!
+      Make sure it has a shebang line (#!/bin/bash) at the top.
+      Make it executable and run it.
+
+      Then run: verify 8.1
+
+  [M] Challenge 8.2 — Project Setup Script
+
+      Write a script called ~/organize.sh that creates three directories
+      inside ~/workshop_project/:  src, docs, and assets.
+
+      Make it executable and include a shebang line (#!/bin/bash) so it can
+      be run directly.
+
+      Hint: Your script should use mkdir to create directories. If a parent
+      directory doesn't exist yet, there's an option to create the whole
+      path at once.
+
+      Then run: verify 8.2
+
+  [H] Challenge 8.3 — Script Arguments
+
+      Write a script called ~/greet.sh that takes a name as an argument
+      and prints: Hello, <name>! Welcome to the workshop.
+
+      Make it executable and test it by running it directly.
+
+      For example: ./greet.sh Alice
+      Should print: Hello, Alice! Welcome to the workshop.
+
+      Hint: Inside a bash script, positional parameters like $1, $2, etc.
+            hold the arguments passed on the command line. Use double quotes
+            around strings that include variables.
+
+      Then run: verify 8.3
+
+================================================================================
+
+  CONCEPT 9 — NETWORKING
+  Commands: ping, curl, ss
+
+--------------------------------------------------------------------------------
+
+  [E] Challenge 9.1 — Ping!
+
+      Use 'ping' to check if localhost is reachable, then save the output
+      to ~/ping_result.txt.
+
+      Hint: ping -c 3 localhost is a good way to capture a short result.
+
+      Then run: verify 9.1
+
+  [M] Challenge 9.2 — Fetch from the Web
+
+      A web server is running inside this container on port 8080.
+      Use 'curl' to fetch: http://localhost:8080/flag
+      Save the response to ~/web_flag.txt.
+
+      Then run: verify 9.2
+
+  [H] Challenge 9.3 — Find the Hidden Service
+
+      A mystery web service is running on this container, but you don't
+      know which port it's on. Use 'ss' to find listening ports, then
+      use 'curl' to fetch from the mystery port.
+
+      Save the discovered port number to ~/hidden_port.txt and the response
+      from http://localhost:<port>/flag to ~/hidden_flag.txt.
+
+      Hint: The 'ss' command can list listening network sockets. Look for
+      options that show TCP/UDP ports in numeric form. Once you find
+            an unfamiliar port, try fetching from it with curl.
+            Save only the port number in ~/hidden_port.txt.
+
+      Then run: verify 9.3
+
+================================================================================
+
+  That's all 27 challenges! Good luck and have fun learning Linux.
+
+  Remember:
+  - 'challenges' to view this list again
+  - 'verify <number>' to check your work
+  - 'man <command>' for help on any command
+
+================================================================================
