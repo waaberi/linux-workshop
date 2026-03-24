@@ -65,6 +65,9 @@ docker build -t linux-workshop .
 sudo ./deploy/install-host-broker.sh --image linux-workshop
 ```
 
+Re-running the installer keeps the existing invite code unless you explicitly
+pass `--registration-code ...`.
+
 Optional flags:
 
 - `--network workshop-net`

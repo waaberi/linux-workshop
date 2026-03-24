@@ -19,6 +19,7 @@ WORKSHOP_HOST_LABEL="$(hostname -f 2>/dev/null || hostname)"
 WORKSHOP_REGISTRATION_BIND="0.0.0.0"
 WORKSHOP_REGISTRATION_PORT="8088"
 WORKSHOP_REGISTRATION_CODE="$(head -c 12 /dev/urandom | xxd -p)"
+REGISTRATION_CODE_EXPLICIT=0
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -32,7 +33,7 @@ while [ "$#" -gt 0 ]; do
         --host-label) WORKSHOP_HOST_LABEL="$2"; shift 2 ;;
         --registration-bind) WORKSHOP_REGISTRATION_BIND="$2"; shift 2 ;;
         --registration-port) WORKSHOP_REGISTRATION_PORT="$2"; shift 2 ;;
-        --registration-code) WORKSHOP_REGISTRATION_CODE="$2"; shift 2 ;;
+        --registration-code) WORKSHOP_REGISTRATION_CODE="$2"; REGISTRATION_CODE_EXPLICIT=1; shift 2 ;;
         *)
             echo "Unknown argument: $1" >&2
             exit 1
@@ -47,7 +48,27 @@ for cmd in docker iptables sshd systemctl python3; do
     fi
 done
 
+manage_ssh_service() {
+    if systemctl list-unit-files sshd.service >/dev/null 2>&1; then
+        systemctl enable --now sshd >/dev/null
+        systemctl reload sshd >/dev/null 2>&1 || true
+    elif systemctl list-unit-files ssh.service >/dev/null 2>&1; then
+        systemctl enable --now ssh >/dev/null
+        systemctl reload ssh >/dev/null 2>&1 || true
+    else
+        echo "Could not find an sshd systemd unit on this host." >&2
+        exit 1
+    fi
+}
+
 groupadd -f workshop-students
+
+if [ -f /etc/workshop/registration.env ] && [ "$REGISTRATION_CODE_EXPLICIT" -eq 0 ]; then
+    existing_code=$(sed -n 's/^WORKSHOP_REGISTRATION_CODE=//p' /etc/workshop/registration.env | tail -n 1)
+    if [ -n "$existing_code" ]; then
+        WORKSHOP_REGISTRATION_CODE="$existing_code"
+    fi
+fi
 
 install -d -m 755 /usr/local/lib/workshop /etc/workshop /etc/ssh/sshd_config.d
 install -m 755 "$SCRIPT_DIR/workshop-login.sh" /usr/local/lib/workshop/workshop-login.sh
@@ -120,9 +141,10 @@ iptables -A WORKSHOP-EGRESS -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
 iptables -A WORKSHOP-EGRESS -s "$WORKSHOP_SUBNET" -j REJECT --reject-with icmp-admin-prohibited
 iptables -C DOCKER-USER -j WORKSHOP-EGRESS >/dev/null 2>&1 || iptables -I DOCKER-USER 1 -j WORKSHOP-EGRESS
 
-systemctl reload ssh >/dev/null 2>&1 || systemctl reload sshd >/dev/null 2>&1 || true
 systemctl daemon-reload
-systemctl enable --now workshop-registration.service >/dev/null
+manage_ssh_service
+systemctl enable workshop-registration.service >/dev/null
+systemctl restart workshop-registration.service >/dev/null
 
 cat <<EOF
 Host broker installed.
