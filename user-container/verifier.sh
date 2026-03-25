@@ -227,7 +227,7 @@ sorted_normalized_file_paths() {
         if [[ "$line" != /* ]]; then
             line="$HOME/$line"
         fi
-        line=$(normalize_path "$line") || return 1
+        line=$(normalize_path "$line") || continue
         normalized+=("$line")
     done < "$file"
 
@@ -313,16 +313,17 @@ verify_1_2() {
     flag_file="$HOME/labyrinth/right/passage/chamber/flag.txt"
     atime=$(stat -c %X "$flag_file" 2>/dev/null || echo 0)
 
-    if [ "$atime" -le 946684800 ]; then
+    if [ "$atime" -gt 946684800 ] || logged_since "1.2" "flag\.txt"; then
+        pass "1.2" "labyrinth_solved"
+    else
         fail "Navigate through ~/labyrinth/ and read the flag.txt file."
         hint "Use 'ls' to explore directories and 'cd' to move into them."
-    else
-        pass "1.2" "labyrinth_solved"
     fi
 }
 
 reset_1_2() {
     find "$HOME/labyrinth" -type f -exec touch -a -t 200001010000.00 {} +
+    set_log_marker "1.2"
     reset_msg "1.2"
 }
 
@@ -476,18 +477,29 @@ reset_3_2() {
 # ============================================================
 
 verify_3_3() {
-    AUDIT_DIR="$HOME/challenges/perms/audit"
-    TARGET=""
-    for f in "$AUDIT_DIR"/report*.txt; do
-        PERM=$(stat -c '%a' "$f")
-        [ "$PERM" = "600" ] && TARGET="$f"
+    local audit_dir target perm atime target_name f
+
+    audit_dir="$HOME/challenges/perms/audit"
+    target=""
+    for f in "$audit_dir"/report*.txt; do
+        perm=$(stat -c '%a' "$f" 2>/dev/null || true)
+        [ "$perm" = "600" ] && target="$f"
     done
-    ATIME=$(stat -c '%X' "$TARGET" 2>/dev/null || echo 0)
-    if [ "$ATIME" -le 946684800 ]; then
-        fail "You haven't read any of the audit files yet."
-        hint "Use 'ls -l' to inspect permissions, then read the file that matches 600."
-    else
+
+    if [ -z "$target" ]; then
+        fail "Challenge state is broken — no 600-permission file found."
+        hint "Run 'reset 3.3' to restore the challenge state."
+        return
+    fi
+
+    atime=$(stat -c '%X' "$target" 2>/dev/null || echo 0)
+    target_name=$(basename "$target")
+
+    if [ "$atime" -gt 946684800 ] || logged_since "3.3" "$target_name"; then
         pass "3.3" "permission_reader"
+    else
+        fail "You haven't read the 600-permission file yet."
+        hint "Use 'ls -l' to inspect permissions, then read the file that matches 600."
     fi
 }
 
@@ -509,6 +521,7 @@ reset_3_3() {
     done
     chown ieee:ieee "$HOME/challenges/perms/audit"/report*.txt
     touch -a -t 200001010000.00 "$HOME/challenges/perms/audit"/report*.txt
+    set_log_marker "3.3"
     reset_msg "3.3"
 }
 
@@ -851,9 +864,9 @@ verify_7_2() {
     elif [ -z "$ACTUAL" ]; then
         fail "File ~/path_flag.txt not found or is empty."
         hint "Add ~/challenges/path/bin to PATH, run getflag, and save its output to ~/path_flag.txt."
-    elif [ "$ACTUAL" = "$EXPECTED" ] && logged_since "7.2" "export.*PATH.*path/bin" && logged_since "7.2" "\bgetflag\b"; then
+    elif [ "$ACTUAL" = "$EXPECTED" ] && logged_since "7.2" "(export.*PATH|PATH=).*path/bin" && logged_since "7.2" "\bgetflag\b"; then
         pass "7.2" "path_updated"
-    elif [ "$ACTUAL" = "$EXPECTED" ] && logged_since "7.2" "export.*PATH.*path/bin"; then
+    elif [ "$ACTUAL" = "$EXPECTED" ] && logged_since "7.2" "(export.*PATH|PATH=).*path/bin"; then
         fail "You updated your PATH — now run 'getflag'."
     elif [ "$ACTUAL" = "$EXPECTED" ] && logged_since "7.2" "\bgetflag\b"; then
         fail "getflag won't work until you add its directory to PATH."
@@ -861,7 +874,7 @@ verify_7_2() {
     elif [[ "$ACTUAL" == *[[:space:]]* ]]; then
         fail "~/path_flag.txt should contain only the output of getflag."
         hint "Save just the command output, not the command itself or extra text."
-    elif logged_since "7.2" "export.*PATH.*path/bin" && logged_since "7.2" "\bgetflag\b"; then
+    elif logged_since "7.2" "(export.*PATH|PATH=).*path/bin" && logged_since "7.2" "\bgetflag\b"; then
         fail "~/path_flag.txt doesn't contain the correct getflag output."
         hint "Run getflag after updating PATH, then save only its output to ~/path_flag.txt."
     else
