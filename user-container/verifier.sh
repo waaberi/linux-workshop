@@ -17,7 +17,7 @@ HIDDEN_FLAG_FILE="/opt/.hidden_flag"
 HIDDEN_PORT_FILE="/opt/.hidden_port"
 WEB_SERVICE_CONFIG="/opt/.web_service"
 HIDDEN_SERVICE_CONFIG="/opt/.hidden_service"
-SSH_SECRET_ENV_CONFIG="/etc/ssh/sshd_config.d/workshop-secret.conf"
+BASHRC_BASELINE="/opt/.bashrc.baseline"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -102,8 +102,12 @@ generate_hidden_port() {
 }
 
 write_secure_token() {
-    generate_token "$1" | tee "$2"
+    local token
+
+    token=$(generate_token "$1")
+    printf '%s\n' "$token" > "$2"
     chmod 600 "$2"
+    printf '%s\n' "$token"
 }
 
 verify_file_match() {
@@ -203,13 +207,54 @@ write_service_config() {
     chmod 600 "$1"
 }
 
-write_secret_env_config() {
-    local secret
+normalize_path() {
+    if [ -z "${1:-}" ]; then
+        return 1
+    fi
+    readlink -f -- "$1" 2>/dev/null
+}
 
-    secret=$(cat "$SECRET_FLAG_FILE" 2>/dev/null)
-    mkdir -p /etc/ssh/sshd_config.d
-    printf 'SetEnv SECRET_FLAG=%s\n' "$secret" > "$SSH_SECRET_ENV_CONFIG"
-    chmod 600 "$SSH_SECRET_ENV_CONFIG"
+sorted_normalized_file_paths() {
+    local file="$1"
+    local line
+    local normalized=()
+
+    [ -f "$file" ] || return 1
+
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        line=${line%$'\r'}
+        if [[ "$line" != /* ]]; then
+            line="$HOME/$line"
+        fi
+        line=$(normalize_path "$line") || return 1
+        normalized+=("$line")
+    done < "$file"
+
+    [ "${#normalized[@]}" -gt 0 ] || return 1
+    printf '%s\n' "${normalized[@]}" | sort -u
+}
+
+worker_secret_process_running() {
+    local proc_dir
+    local cmdline
+    local environ
+
+    for proc_dir in /proc/[0-9]*; do
+        [ -r "$proc_dir/cmdline" ] || continue
+        [ -r "$proc_dir/environ" ] || continue
+
+        cmdline=$(tr '\0' ' ' < "$proc_dir/cmdline" 2>/dev/null || true)
+        case "$cmdline" in
+            worker_[1-4]\ --config=/etc/*.conf\ 99999\ *) ;;
+            *) continue ;;
+        esac
+
+        environ=$(tr '\0' '\n' < "$proc_dir/environ" 2>/dev/null || true)
+        grep -Fx "PROC_SECRET=$1" <<< "$environ" > /dev/null 2>&1 && return 0
+    done
+
+    return 1
 }
 
 start_flag_service() {
@@ -263,28 +308,16 @@ reset_1_1() {
 # ============================================================
 
 verify_1_2() {
-    local flag_file latest_file latest_atime atime f
+    local flag_file atime
 
     flag_file="$HOME/labyrinth/right/passage/chamber/flag.txt"
-    latest_file=""
-    latest_atime=0
+    atime=$(stat -c %X "$flag_file" 2>/dev/null || echo 0)
 
-    while IFS= read -r f; do
-        atime=$(stat -c %X "$f" 2>/dev/null || echo 0)
-        if [ "$atime" -gt "$latest_atime" ]; then
-            latest_atime=$atime
-            latest_file="$f"
-        fi
-    done < <(find "$HOME/labyrinth" -type f 2>/dev/null)
-
-    if [ "$latest_atime" -le 946684800 ]; then
+    if [ "$atime" -le 946684800 ]; then
         fail "Navigate through ~/labyrinth/ and read the flag.txt file."
         hint "Use 'ls' to explore directories and 'cd' to move into them."
-    elif [ "$latest_file" = "$flag_file" ]; then
-        pass "1.2" "labyrinth_solved"
     else
-        fail "flag.txt wasn't the last labyrinth file you read."
-        hint "Once you find flag.txt, read it after exploring the dead ends."
+        pass "1.2" "labyrinth_solved"
     fi
 }
 
@@ -398,11 +431,20 @@ reset_2_3() {
 # ============================================================
 
 verify_3_1() {
-    if runuser -u ieee -- test -x "$HOME/challenges/perms/show_flag.sh"; then
-        pass "3.1" "execute_permission"
-    else
+    local out
+
+    if ! runuser -u ieee -- test -x "$HOME/challenges/perms/show_flag.sh"; then
         fail "The script still isn't executable."
         hint "chmod can add the execute permission to a file."
+        return
+    fi
+
+    out=$(runuser -u ieee -- "$HOME/challenges/perms/show_flag.sh" 2>/dev/null || true)
+    if [ "$out" = "EXECUTE_SUCCESS" ]; then
+        pass "3.1" "execute_permission"
+    else
+        fail "The script is executable, but it does not run correctly yet."
+        hint "Run the script directly and make sure it prints the expected message."
     fi
 }
 
@@ -436,25 +478,16 @@ reset_3_2() {
 verify_3_3() {
     AUDIT_DIR="$HOME/challenges/perms/audit"
     TARGET=""
-    LATEST=""
-    LATEST_ATIME=0
     for f in "$AUDIT_DIR"/report*.txt; do
         PERM=$(stat -c '%a' "$f")
         [ "$PERM" = "600" ] && TARGET="$f"
-        ATIME=$(stat -c '%X' "$f")
-        if [ "$ATIME" -gt "$LATEST_ATIME" ]; then
-            LATEST_ATIME=$ATIME
-            LATEST="$f"
-        fi
     done
-    if [ "$LATEST_ATIME" -le 946684800 ]; then
+    ATIME=$(stat -c '%X' "$TARGET" 2>/dev/null || echo 0)
+    if [ "$ATIME" -le 946684800 ]; then
         fail "You haven't read any of the audit files yet."
         hint "Use 'ls -l' to inspect permissions, then read the file that matches 600."
-    elif [ "$LATEST" = "$TARGET" ]; then
-        pass "3.3" "permission_reader"
     else
-        fail "The last file you read wasn't the one with 600 permissions."
-        hint "Look at the 'ls -l' output more carefully. Which permission string shows only owner read/write?"
+        pass "3.3" "permission_reader"
     fi
 }
 
@@ -556,14 +589,14 @@ reset_4_3() {
 
 verify_5_1() {
     EXPECTED=$(cat "$BIGFILE_PATH_FILE" 2>/dev/null)
-    ACTUAL=$(cat "$HOME/bigfile.txt" 2>/dev/null | tr -d '[:space:]')
+    ACTUAL=$(sed -n '1{s/[[:space:]]*$//;p;}' "$HOME/bigfile.txt" 2>/dev/null)
     if [ -z "$EXPECTED" ]; then
         fail "Challenge state is missing the large file path."
         hint "Run 'reset 5.1' to restore the challenge state, then try again."
     elif [ -z "$ACTUAL" ]; then
         fail "File ~/bigfile.txt not found or is empty."
         hint "Use 'find' with a size filter, then save the result to ~/bigfile.txt."
-    elif [ "$ACTUAL" = "$EXPECTED" ]; then
+    elif [ "$(normalize_path "$ACTUAL")" = "$(normalize_path "$EXPECTED")" ]; then
         pass "5.1" "big_file_found"
     else
         fail "~/bigfile.txt doesn't contain the correct path."
@@ -582,10 +615,23 @@ reset_5_1() {
 # ============================================================
 
 verify_5_2() {
-    verify_file_match "5.2" "recursive_grep" "token.txt" \
-        "$(grep -r "WORKSHOP_TOKEN" "$HOME/challenges/search/data/" 2>/dev/null)" \
-        "Use grep to search recursively, then redirect the output to ~/token.txt." \
-        "Search for the exact string 'WORKSHOP_TOKEN' across all files in the directory."
+    local expected_recursive
+    local expected_line
+    local actual
+
+    expected_recursive=$(grep -r "WORKSHOP_TOKEN" "$HOME/challenges/search/data/" 2>/dev/null)
+    expected_line=$(printf '%s\n' "$expected_recursive" | sed 's|^[^:]*:||')
+    actual=$(cat "$HOME/token.txt" 2>/dev/null)
+
+    if [ -z "$actual" ]; then
+        fail "File ~/token.txt not found or is empty."
+        hint "Use grep to search recursively, then redirect the matching result to ~/token.txt."
+    elif [ "$actual" = "$expected_recursive" ] || [ "$actual" = "$expected_line" ]; then
+        pass "5.2" "recursive_grep"
+    else
+        fail "~/token.txt doesn't contain the correct grep result."
+        hint "Search for the exact string 'WORKSHOP_TOKEN' across the directory and save either the recursive grep result or the matching line."
+    fi
 }
 
 reset_5_2() {
@@ -612,7 +658,7 @@ reset_5_2() {
 
 verify_5_3() {
     EXPECTED=$(find "$HOME/challenges/search/configs/" -name "*.conf" -mtime -7 2>/dev/null | sort)
-    ACTUAL=$(sort "$HOME/recent.txt" 2>/dev/null)
+    ACTUAL=$(sorted_normalized_file_paths "$HOME/recent.txt" 2>/dev/null || true)
     if [ -z "$ACTUAL" ]; then
         fail "File ~/recent.txt not found or is empty."
         hint "Use 'find' with a time filter, then redirect the output to ~/recent.txt."
@@ -721,7 +767,7 @@ verify_6_3() {
         fail "File ~/worker_secret.txt not found or is empty."
         hint "Find the right worker PID, read /proc/<PID>/environ, and save just the secret value to ~/worker_secret.txt."
     elif [ "$ACTUAL" = "$EXPECTED" ]; then
-        if worker_secret_running "$EXPECTED"; then
+        if worker_secret_process_running "$EXPECTED"; then
             pass "6.3" "proc_explorer"
         else
             fail "The worker carrying the secret doesn't seem to be running right now."
@@ -786,7 +832,6 @@ reset_7_1() {
     if [ ! -f "$SECRET_FLAG_FILE" ]; then
         write_secure_token ENV_ "$SECRET_FLAG_FILE" > /dev/null
     fi
-    write_secret_env_config
     rm -f "$HOME/secret_flag.txt"
     set_log_marker "7.1"
     reset_msg "7.1"
@@ -852,8 +897,12 @@ verify_7_3() {
 }
 
 reset_7_3() {
-    # Remove any alias hello line from .bashrc
-    sed -i "/^alias hello=/d" "$HOME/.bashrc"
+    if [ -f "$BASHRC_BASELINE" ]; then
+        cp "$BASHRC_BASELINE" "$HOME/.bashrc"
+        chown ieee:ieee "$HOME/.bashrc"
+    else
+        sed -i "/^alias hello=/d" "$HOME/.bashrc"
+    fi
     reset_msg "7.3"
 }
 
