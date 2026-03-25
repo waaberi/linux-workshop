@@ -192,8 +192,39 @@ iptables -A WORKSHOP-EGRESS -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
 iptables -A WORKSHOP-EGRESS -s "$WORKSHOP_SUBNET" -j REJECT --reject-with icmp-admin-prohibited
 iptables -C DOCKER-USER -j WORKSHOP-EGRESS >/dev/null 2>&1 || iptables -I DOCKER-USER 1 -j WORKSHOP-EGRESS
 
+# Persist egress rules across reboots via a dedicated systemd service.
+# Docker must be up before rules are applied so DOCKER-USER chain exists.
+cat > /usr/local/lib/workshop/workshop-iptables.sh <<EOF
+#!/bin/bash
+set -euo pipefail
+SUBNET=\$(sed -n 's/^WORKSHOP_SUBNET=//p' /etc/workshop/broker.env | tail -n 1)
+if [ -z "\$SUBNET" ]; then exit 1; fi
+iptables -N WORKSHOP-EGRESS 2>/dev/null || true
+iptables -F WORKSHOP-EGRESS
+iptables -A WORKSHOP-EGRESS -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
+iptables -A WORKSHOP-EGRESS -s "\$SUBNET" -j REJECT --reject-with icmp-admin-prohibited
+iptables -C DOCKER-USER -j WORKSHOP-EGRESS >/dev/null 2>&1 || iptables -I DOCKER-USER 1 -j WORKSHOP-EGRESS
+EOF
+chmod 755 /usr/local/lib/workshop/workshop-iptables.sh
+
+cat > /etc/systemd/system/workshop-iptables.service <<'EOF'
+[Unit]
+Description=Workshop container egress firewall
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/lib/workshop/workshop-iptables.sh
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 systemctl daemon-reload
 manage_ssh_service
+systemctl enable workshop-iptables.service >/dev/null
 systemctl enable workshop-registration.service >/dev/null
 systemctl restart workshop-registration.service >/dev/null
 

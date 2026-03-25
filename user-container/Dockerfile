@@ -19,7 +19,6 @@ RUN rm -f /etc/dpkg/dpkg.cfg.d/excludes && \
     grep \
     man-db \
     manpages \
-    openssh-server \
     xxd \
     sudo \
     && if [ "$(dpkg-divert --truename /usr/bin/man)" = "/usr/bin/man.REAL" ]; then rm -f /usr/bin/man && dpkg-divert --quiet --remove --rename /usr/bin/man; fi \
@@ -31,11 +30,6 @@ ENV LESSCHARSET=utf-8
 
 # Create ieee user
 RUN useradd -m -s /bin/bash ieee
-
-RUN mkdir -p /etc/ssh/sshd_config.d /run/sshd && \
-    rm -f /etc/ssh/ssh_host_* && \
-    printf 'PermitRootLogin no\nAllowUsers ieee\nPasswordAuthentication yes\nKbdInteractiveAuthentication no\nChallengeResponseAuthentication no\nUseDNS no\nX11Forwarding no\nAllowAgentForwarding no\nAllowTcpForwarding no\nGatewayPorts no\nPermitTunnel no\nDisableForwarding yes\n' > /etc/ssh/sshd_config.d/workshop.conf && \
-    chmod 600 /etc/ssh/sshd_config.d/workshop.conf
 
 # Sudo: ieee can ONLY run the verifier helpers and fixed challenge emitters as root
 RUN echo "ieee ALL=(root) NOPASSWD: /opt/verifier.sh, /opt/cmdlog.sh, /opt/pipes-step1.sh, /opt/pipes-noisy.sh" > /etc/sudoers.d/ieee && \
@@ -71,15 +65,27 @@ RUN printf '#!/bin/bash\nset -e\nname=$(basename "$0")\ncase "$name" in\n    ver
 # Run setup to create all challenge files and directories
 RUN /opt/setup.sh
 
-# Add transparent command logging to .bashrc (logged via sudo to root-only file)
-RUN echo '' >> /home/ieee/.bashrc && \
-    echo 'export LANG=C.UTF-8' >> /home/ieee/.bashrc && \
-    echo 'export LESSCHARSET=utf-8' >> /home/ieee/.bashrc && \
-    echo '_log_cmd() { local c=$(history 1 | sed "s/^[[:space:]]*[0-9]*[[:space:]]*//"); [ -n "$c" ] && cmdlog "$c"; }' >> /home/ieee/.bashrc && \
-    echo 'PROMPT_COMMAND="_log_cmd;${PROMPT_COMMAND}"' >> /home/ieee/.bashrc && \
-    chown ieee:ieee /home/ieee/.bashrc
+# Keep a clean baseline for challenge 7.3 resets.
+RUN cp /home/ieee/.bashrc /opt/.bashrc.baseline && chmod 644 /opt/.bashrc.baseline
+
+# Add transparent command logging outside the student's ~/.bashrc so challenge 7.3
+# cannot break later verifier checks by accident.
+RUN printf '%s\n' \
+    'export LANG=C.UTF-8' \
+    'export LESSCHARSET=utf-8' \
+    '_workshop_log_cmd() {' \
+    '    local c' \
+    '    c=$(history 1 | sed "s/^[[:space:]]*[0-9]*[[:space:]]*//")' \
+    '    [ -n "$c" ] && cmdlog "$c"' \
+    '}' \
+    'case ";${PROMPT_COMMAND:-};" in' \
+    '    *";_workshop_log_cmd;"*) ;;' \
+    '    "") PROMPT_COMMAND="_workshop_log_cmd" ;;' \
+    '    *) PROMPT_COMMAND="_workshop_log_cmd;${PROMPT_COMMAND}" ;;' \
+    'esac' \
+    > /etc/profile.d/workshop-shell.sh && \
+    chmod 644 /etc/profile.d/workshop-shell.sh
 
 # Entrypoint runs as root (starts services, then drops to ieee)
 WORKDIR /home/ieee
-EXPOSE 22
 ENTRYPOINT ["/opt/entrypoint.sh"]

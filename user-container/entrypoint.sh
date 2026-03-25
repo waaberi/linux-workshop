@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # entrypoint.sh — Runs as root: starts services, then drops to ieee shell
 
 AUDIT_DIR="/home/ieee/challenges/perms/audit"
@@ -14,7 +15,6 @@ HIDDEN_FLAG_FILE="/opt/.hidden_flag"
 HIDDEN_PORT_FILE="/opt/.hidden_port"
 WEB_SERVICE_CONFIG="/opt/.web_service"
 HIDDEN_SERVICE_CONFIG="/opt/.hidden_service"
-SSH_SECRET_ENV_CONFIG="/etc/ssh/sshd_config.d/workshop-secret.conf"
 
 generate_token() {
     printf '%s%s\n' "$1" "$(head -c 6 /dev/urandom | xxd -p)"
@@ -25,7 +25,10 @@ generate_hidden_port() {
 }
 
 write_secure_token() {
-    generate_token "$1" | tee "$2"
+    local token
+
+    token=$(generate_token "$1")
+    printf '%s\n' "$token" > "$2"
     chmod 600 "$2"
 }
 
@@ -76,20 +79,17 @@ write_service_config() {
     chmod 600 "$1"
 }
 
-write_secret_env_config() {
-    local secret
+start_flag_service() {
+    local config_file="$1"
+    local pid
 
-    secret=$(cat "$SECRET_FLAG_FILE")
-    mkdir -p /etc/ssh/sshd_config.d
-    printf 'SetEnv SECRET_FLAG=%s\n' "$secret" > "$SSH_SECRET_ENV_CONFIG"
-    chmod 600 "$SSH_SECRET_ENV_CONFIG"
-}
-
-configure_ssh_access() {
-    : "${IEEE_PASSWORD:=ieee}"
-    echo "ieee:${IEEE_PASSWORD}" | chpasswd
-    mkdir -p /run/sshd /etc/ssh/sshd_config.d
-    ssh-keygen -A >/dev/null 2>&1
+    python3 /opt/flag-server.py "$config_file" &
+    pid=$!
+    sleep 0.2
+    if ! kill -0 "$pid" 2>/dev/null; then
+        echo "Failed to start flag service for $config_file" >&2
+        exit 1
+    fi
 }
 
 start_network_services() {
@@ -100,8 +100,8 @@ start_network_services() {
     write_service_config "$WEB_SERVICE_CONFIG" 8080 "$WEB_FLAG_FILE"
     write_service_config "$HIDDEN_SERVICE_CONFIG" "$hidden_port" "$HIDDEN_FLAG_FILE"
 
-    python3 /opt/flag-server.py "$WEB_SERVICE_CONFIG" &
-    python3 /opt/flag-server.py "$HIDDEN_SERVICE_CONFIG" &
+    start_flag_service "$WEB_SERVICE_CONFIG"
+    start_flag_service "$HIDDEN_SERVICE_CONFIG"
 }
 
 # ============================================================
@@ -201,9 +201,6 @@ if [ ! -f "$HIDDEN_FLAG_FILE" ] || [ ! -f "$HIDDEN_PORT_FILE" ]; then
 fi
 
 write_getflag_script
-rm -f /etc/profile.d/workshop-secret.sh
-write_secret_env_config
-configure_ssh_access
 
 SPY_NAME=$(cat "$SPY_NAME_FILE")
 SECRET_FLAG=$(cat "$SECRET_FLAG_FILE")
@@ -246,12 +243,11 @@ touch /opt/.progress /opt/.reset_markers
 chmod 600 /opt/.progress /opt/.reset_markers
 
 # ============================================================
-# SSH server + optional local shell
+# Runtime mode
 # ============================================================
 
 if [ -t 0 ] && [ -t 1 ]; then
     /usr/local/bin/welcome
-    /usr/sbin/sshd -D -e &
     export SECRET_FLAG
     export HOME="$HOME_DIR"
     export USER="ieee"
@@ -259,5 +255,5 @@ if [ -t 0 ] && [ -t 1 ]; then
     export SHELL="/bin/bash"
     exec runuser --preserve-environment -u ieee -- bash -l
 else
-    exec /usr/sbin/sshd -D -e
+    exec tail -f /dev/null
 fi

@@ -21,10 +21,18 @@ if [ -f /etc/systemd/system/workshop-registration.service ]; then
     systemctl reset-failed workshop-registration.service >/dev/null 2>&1 || true
 fi
 
+if [ -f /etc/systemd/system/workshop-iptables.service ]; then
+    systemctl disable --now workshop-iptables.service >/dev/null 2>&1 || true
+    rm -f /etc/systemd/system/workshop-iptables.service
+    systemctl daemon-reload
+    systemctl reset-failed workshop-iptables.service >/dev/null 2>&1 || true
+fi
+
 rm -f /etc/ssh/sshd_config.d/workshop-broker.conf
 rm -f /etc/sudoers.d/workshop-broker
 rm -rf /usr/local/lib/workshop/web-server
 rm -f /usr/local/lib/workshop/workshop-login.sh
+rm -f /usr/local/lib/workshop/workshop-iptables.sh
 rm -f /usr/local/bin/workshop-ops
 
 if [ -d /usr/local/lib/workshop ] && [ -z "$(ls -A /usr/local/lib/workshop 2>/dev/null)" ]; then
