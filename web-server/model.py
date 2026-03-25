@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import json
 import os
+from contextlib import closing
 import pam
 import pwd
 import re
@@ -175,63 +176,48 @@ def db_connect() -> sqlite3.Connection:
 
 
 def audit(actor: str, action: str, target: str, detail: str) -> None:
-    conn = db_connect()
-    with conn:
+    with closing(db_connect()) as conn, conn:
         conn.execute(
             "INSERT INTO audit_log(actor, action, target, detail) VALUES (?, ?, ?, ?)",
             (actor, action, target, detail),
         )
-    conn.close()
 
 
 def recent_activity(limit: int = 12) -> list[sqlite3.Row]:
-    conn = db_connect()
-    try:
+    with closing(db_connect()) as conn:
         return conn.execute(
             "SELECT actor, action, target, detail, created_at FROM audit_log ORDER BY id DESC LIMIT ?",
             (limit,),
         ).fetchall()
-    finally:
-        conn.close()
 
 
 def registrations_by_username() -> dict[str, sqlite3.Row]:
-    conn = db_connect()
-    try:
+    with closing(db_connect()) as conn:
         rows = conn.execute(
             "SELECT username, remote_ip, created_at FROM registrations ORDER BY username"
         ).fetchall()
-    finally:
-        conn.close()
     return {row["username"]: row for row in rows}
 
 
 def registrations_for_ip(remote_ip: str) -> list[sqlite3.Row]:
-    conn = db_connect()
-    try:
+    with closing(db_connect()) as conn:
         return conn.execute(
             "SELECT username, remote_ip, created_at FROM registrations WHERE remote_ip = ? ORDER BY created_at",
             (remote_ip,),
         ).fetchall()
-    finally:
-        conn.close()
 
 
 def record_registration(username: str, remote_ip: str) -> None:
-    conn = db_connect()
-    with conn:
+    with closing(db_connect()) as conn, conn:
         conn.execute(
             "INSERT OR REPLACE INTO registrations(username, remote_ip, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
             (username, remote_ip),
         )
-    conn.close()
 
 
 def delete_registration(username: str) -> None:
-    conn = db_connect()
-    with conn:
+    with closing(db_connect()) as conn, conn:
         conn.execute("DELETE FROM registrations WHERE username = ?", (username,))
-    conn.close()
 
 
 def user_in_group(username: str, group_name: str) -> bool:
