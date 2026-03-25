@@ -313,7 +313,7 @@ verify_1_2() {
     flag_file="$HOME/labyrinth/right/passage/chamber/flag.txt"
     atime=$(stat -c %X "$flag_file" 2>/dev/null || echo 0)
 
-    if [ "$atime" -gt 946684800 ] || logged_since "1.2" "flag\.txt"; then
+    if [ "$atime" -gt 946684800 ] || logged_since "1.2" "((^|[[:space:];|&(])((cat|less|more|head|tail|grep|sed|awk)([[:space:]]+[^;&|()]*)*[[:space:]]+([^[:space:]]*/)?flag\.txt([[:space:];|&)]|$))|((^|[[:space:];|&(])([^[:space:]]*/)?flag\.txt([[:space:]]|$)))"; then
         pass "1.2" "labyrinth_solved"
     else
         fail "Navigate through ~/labyrinth/ and read the flag.txt file."
@@ -495,7 +495,7 @@ verify_3_3() {
     atime=$(stat -c '%X' "$target" 2>/dev/null || echo 0)
     target_name=$(basename "$target")
 
-    if [ "$atime" -gt 946684800 ] || logged_since "3.3" "$target_name"; then
+    if [ "$atime" -gt 946684800 ] || logged_since "3.3" "((^|[[:space:];|&(])((cat|less|more|head|tail|grep|sed|awk)([[:space:]]+[^;&|()]*)*[[:space:]]+([^[:space:]]*/)?${target_name}([[:space:];|&)]|$))|((^|[[:space:];|&(])([^[:space:]]*/)?${target_name}([[:space:]]|$)))"; then
         pass "3.3" "permission_reader"
     else
         fail "You haven't read the 600-permission file yet."
