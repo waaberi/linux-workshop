@@ -585,9 +585,11 @@ For **directories**:
 
 | Permission | Effect |
 |------------|--------|
-| Read       | List files in the directory |
-| Write      | Create/delete files |
-| Execute    | Enter the directory (`cd`) |
+| Read       | List directory contents |
+| Write      | Modify directory entries |
+| Execute    | Enter the directory and access items by name |
+
+Creating, deleting, or renaming files in a directory usually requires **both write and execute** on that directory.
 
 
 ---
@@ -778,7 +780,17 @@ You can recursively modify permissions for an entire directory:
 chmod -R 755 project/
 ```
 
-Be careful with recursive changes as they affect **every file inside the directory**.
+:::warning
+Avoid using `chmod -R 755` on an entire project unless you really want **every file** to be executable.
+Directories and regular files often need different permissions.
+
+:::
+
+A common pattern is:
+
+* Directories: `755`
+* Regular files: `644`
+* Scripts or programs that should run: `755`
 
 
 ---
@@ -806,31 +818,36 @@ By default:
 * **stdout** → terminal screen
 * **stderr** → terminal screen
 
-This design allows programs to be chained together easily.
+A useful mental model is:
 
-For example, one command's output can become another command's input.
+* A command **reads** from `stdin`
+* A command writes normal results to `stdout`
+* A command writes problems to `stderr`
+
+Even though `stdout` and `stderr` often both appear on your screen, they are **different streams**.
+That difference matters when you redirect output or connect commands with pipes.
 
 
 ---
 
 ## Redirection
 
-Redirection allows you to **send output somewhere else**, such as into a file.
+Redirection changes **where a stream goes**.
 
-### Overwrite Output (`>`)
+### Redirect `stdout` (`>`)
 
 ```bash
 echo "Hello" > file.txt
 ```
 
-This sends the program's **stdout** to `file.txt`.
+This sends the command's **stdout** to `file.txt`.
 
 If the file already exists, it will be **overwritten**.
 
 
 ---
 
-### Append Output (`>>`)
+### Append `stdout` (`>>`)
 
 ```bash
 echo "World" >> file.txt
@@ -841,7 +858,20 @@ This **adds text to the end of the file** instead of replacing it.
 
 ---
 
-### Redirecting Errors
+### Redirect `stdin` (`<`)
+
+You can also send a file into a command as input.
+
+```bash
+wc -l < file.txt
+```
+
+This sends the contents of `file.txt` into the command's `stdin`.
+
+
+---
+
+### Redirect `stderr` (`2>`)
 
 Errors are written to **stderr**, which can also be redirected.
 
@@ -856,9 +886,16 @@ This sends error messages into `error.log`.
 | Symbol | Meaning |
 |--------|---------|
 | `>`    | Redirect stdout |
+| `>>`   | Append stdout |
+| `<`    | Redirect stdin |
 | `2>`   | Redirect stderr |
 
-You can also combine both outputs.
+
+---
+
+### Redirect Both `stdout` and `stderr`
+
+Sometimes you want to save **all output** from a command.
 
 Example:
 
@@ -871,22 +908,57 @@ This sends **both stdout and stderr** into the same file.
 
 ---
 
-## Pipes
+### Discard Output with `/dev/null`
 
-A **pipe (**`**|**`**)** sends the **stdout of one command** into the **stdin of another**.
+`/dev/null` is a special file that throws away anything sent to it.
 
 Example:
+
+```bash
+command > /dev/null
+```
+
+This hides the command's normal output.
+
+You can also separate normal output from errors:
+
+```bash
+command > /dev/null 2> errors.txt
+```
+
+This discards `stdout` while saving `stderr`.
+
+
+---
+
+## Pipes
+
+A **pipe** (`|`) sends the **stdout of one command** into the **stdin of another**.
+
+Example:
+
+```bash
+echo "one two three" | wc -w
+```
+
+Explanation:
+
+1. `echo` writes text to `stdout`
+2. `|` connects that output to the next command
+3. `wc -w` reads from `stdin` and counts the words
+
+Another example:
 
 ```bash
 ls /etc | grep network
 ```
 
-Explanation:
+This works because `ls /etc` writes to `stdout`, and `grep` reads from `stdin`.
 
+Important:
 
-1. `ls /etc` lists files
-2. Its output is passed to `grep`
-3. `grep` filters results containing the word *network*
+* Pipes carry **stdout**
+* `stderr` still goes to the terminal unless you redirect it
 
 More examples:
 
@@ -903,6 +975,33 @@ history | grep ssh
 Searches command history for SSH commands.
 
 Pipes allow you to **build complex workflows using simple tools**.
+
+
+---
+
+## Combining Pipes and Redirection
+
+Pipes and redirection are often used together.
+
+Example:
+
+```bash
+command1 | command2 > result.txt
+```
+
+This means:
+
+1. `command1` writes to `stdout`
+2. `command2` reads that output from `stdin`
+3. The final `stdout` is saved to `result.txt`
+
+You can also separate normal output from errors:
+
+```bash
+command > output.txt 2> errors.txt
+```
+
+This saves `stdout` and `stderr` to different files.
 
 
 ---
@@ -1033,20 +1132,30 @@ If `mkdir` fails, the message will be printed.
 
 ### Combining Both
 
-You can combine both operators.
+You can combine both operators, but this is not always the same as a full `if/else` structure.
 
-Example:
+For example:
 
 ```bash
-mkdir project && echo "Created successfully" || echo "Creation failed"
+mkdir project && echo "Created successfully"
+mkdir project || echo "Creation failed"
 ```
 
-Meaning:
+These examples mean:
 
 
-1. Try to create the directory
-2. If successful → print success message
-3. If it fails → print failure message
+1. Print the success message only if `mkdir` succeeds
+2. Print the failure message only if `mkdir` fails
+
+If you want a true success/failure branch for one command, use `if`:
+
+```bash
+if mkdir project; then
+  echo "Created successfully"
+else
+  echo "Creation failed"
+fi
+```
 
 
 ---
@@ -1072,7 +1181,9 @@ This pattern is very common in **development workflows and automation scripts**.
 
 # Finding Files
 
-Linux includes tools for locating files.
+Linux includes tools for locating files and searching inside them.
+
+## Searching by Name with `find`
 
 Search current directory:
 
@@ -1080,11 +1191,85 @@ Search current directory:
 find . -name "notes.txt"
 ```
 
+This searches from the current directory (`.`) downward.
+
 Search entire system:
 
 ```bash
 sudo find / -name "config.json"
 ```
+
+
+---
+
+## Filtering Search Results
+
+`find` can filter results in many ways.
+
+### Filter by File Type
+
+```bash
+find . -type f
+```
+
+This finds only **regular files**.
+
+```bash
+find . -type d
+```
+
+This finds only **directories**.
+
+
+---
+
+### Filter by Size
+
+```bash
+find . -type f -size +100k
+```
+
+This finds files larger than **100 KB**.
+
+
+---
+
+### Filter by Modification Time
+
+```bash
+find . -type f -mtime -7
+```
+
+This finds files modified within the last **7 days**.
+
+
+---
+
+## Searching Inside Files with `grep`
+
+`find` locates files by properties such as name, size, and time.
+`grep` searches for **text inside files**.
+
+Example:
+
+```bash
+grep "Hello" notes.txt
+```
+
+This prints lines in `notes.txt` that contain `Hello`.
+
+
+---
+
+## Recursive Search with `grep -r`
+
+To search through a directory and all of its subdirectories, use `grep -r`.
+
+```bash
+grep -r "WORKSHOP_TOKEN" ~/challenges/search/data
+```
+
+This searches every file under that directory for the matching text.
 
 Find where a command is located:
 
@@ -1148,11 +1333,74 @@ Install improved process viewer:
 sudo apt install htop
 ```
 
-Force stop a process:
+Stop a process:
+
+```bash
+kill <PID>
+```
+
+This sends the default termination signal (`SIGTERM`), giving the process a chance to shut down cleanly.
+
+If a process does not respond, you can force it to stop:
 
 ```bash
 kill -9 <PID>
 ```
+
+:::warning
+`kill -9` force-stops a process immediately. It should usually be a last resort.
+
+:::
+
+
+---
+
+## The `/proc` Filesystem
+
+Linux exposes process information through a special virtual filesystem called `/proc`.
+
+Each running process has a directory named after its PID.
+
+Example:
+
+```bash
+/proc/1234
+```
+
+Inside that directory are files containing information about the process.
+
+
+---
+
+## Reading a Process Environment
+
+A process's environment variables are stored in:
+
+```bash
+/proc/<PID>/environ
+```
+
+Example:
+
+```bash
+cat /proc/1234/environ
+```
+
+This file is usually **null-separated**, so the output may look hard to read.
+
+To make it readable, convert null characters into new lines:
+
+```bash
+tr '\0' '\n' < /proc/1234/environ
+```
+
+You can then filter the result:
+
+```bash
+tr '\0' '\n' < /proc/1234/environ | grep SECRET
+```
+
+This is useful when you need to inspect the environment of a running process.
 
 
 ---
@@ -1301,6 +1549,37 @@ source ~/.bashrc
 
 ---
 
+## Aliases in `~/.bashrc`
+
+An **alias** is a shortcut name for a command.
+
+Example:
+
+```bash
+alias hello='echo "Hello, Linux!"'
+```
+
+Now running:
+
+```bash
+hello
+```
+
+Will execute:
+
+```bash
+echo "Hello, Linux!"
+```
+
+If you want the alias to persist, add it to `~/.bashrc` and reload the file:
+
+```bash
+source ~/.bashrc
+```
+
+
+---
+
 ## Practical Example
 
 Suppose you create a script:
@@ -1435,6 +1714,41 @@ Your directories will be created, and the messages printed in the terminal.
 
 ---
 
+### Script Arguments (`$1`, `$2`, etc.)
+
+Shell scripts can accept values from the command line.
+These are called **positional parameters**.
+
+| Variable | Meaning |
+|----------|---------|
+| `$1`     | First argument |
+| `$2`     | Second argument |
+| `$3`     | Third argument |
+
+Example:
+
+```bash
+#!/bin/bash
+echo "Hello, $1! Welcome to the workshop."
+```
+
+If the script is run like this:
+
+```bash
+./greet.sh Alice
+```
+
+The output will be:
+
+```bash
+Hello, Alice! Welcome to the workshop.
+```
+
+Using double quotes is important when mixing text with variables.
+
+
+---
+
 ### Adding Scripts to PATH
 
 You can add the folder containing your script to your `PATH` in `.bashrc` to run it from anywhere:
@@ -1507,7 +1821,7 @@ Install development tools:
 sudo apt install build-essential
 ```
 
-This installs the compiler from the: GNU Compiler Collection
+This installs a standard development toolchain on Ubuntu, including GCC, `make`, and other tools commonly used to build software.
 
 
 ---
@@ -1742,6 +2056,26 @@ Run:
 ls /bin | grep zip
 ```
 
+:::warning
+This only checks `/bin`, not every directory in your `PATH`.
+A command may be installed in `/usr/bin` or another location.
+
+:::
+
+This is still a useful exercise for practicing pipes and filtering.
+
+If you want to search for matching commands across your shell environment, try:
+
+```bash
+compgen -c | grep zip
+```
+
+If you want to see where a specific command lives, use:
+
+```bash
+which unzip
+```
+
 Question:
 
 * What tools related to file compression are installed?
@@ -1764,9 +2098,16 @@ Try:
 ls /usr/bin | wc -l
 ```
 
+:::warning
+This counts entries in `/usr/bin`. It does not precisely count all installed programs on the system.
+
+:::
+
+It is still a useful exercise for practicing pipes and counting.
+
 Question:
 
-* How many executable programs are installed?
+* How many entries are in `/usr/bin`?
 
 
 ---
@@ -1856,7 +2197,14 @@ Try writing a script that:
 * Asks the user for their name
 * Prints a greeting message
 
-Hint: You can use `read <var>` to ask input from a user and put it in a variable.
+Hint: You can use `read name` to ask for input from a user and store it in a variable. Here, `name` is just the variable name you choose.
+
+Example:
+
+```bash
+read name
+echo "Hello, $name"
+```
 
 
 ---
@@ -1896,8 +2244,28 @@ If nothing is returned, the program may not be installed or is not in your PATH.
 
 2. Check installation:
 
+:::warning
+Package names do not always match command names exactly.
+Also, `which` only checks whether a command can be found in your `PATH`.
+
+:::
+
+If you need to search for the correct package, use:
+
 ```bash
-sudo apt install program_name
+apt search program_name
+```
+
+Example:
+
+```bash
+apt search python3
+```
+
+After you identify the correct package name, install it with:
+
+```bash
+sudo apt install package_name
 ```
 
 
