@@ -42,6 +42,7 @@ RUN echo "ieee ALL=(root) NOPASSWD: /opt/verifier.sh, /opt/cmdlog.sh, /opt/pipes
     chmod 440 /etc/sudoers.d/ieee
 
 # Copy all files into /opt/ (root-owned)
+COPY common.sh /opt/common.sh
 COPY setup.sh /opt/setup.sh
 COPY verifier.sh /opt/verifier.sh
 COPY cmdlog.sh /opt/cmdlog.sh
@@ -55,7 +56,7 @@ COPY services/flag-server.py /opt/flag-server.py
 #   verifier.sh, setup.sh, entrypoint.sh — root only (contain answers)
 #   challenges.txt, flag-server.py     — world-readable (no secrets)
 #   challenges command, verifier wrapper, welcome — world-executable
-RUN chmod 700 /opt/verifier.sh /opt/setup.sh /opt/entrypoint.sh /opt/cmdlog.sh && \
+RUN chmod 700 /opt/common.sh /opt/verifier.sh /opt/setup.sh /opt/entrypoint.sh /opt/cmdlog.sh && \
     chmod 644 /opt/challenges.txt /opt/flag-server.py && \
     chmod +x /usr/local/bin/challenges /usr/local/bin/welcome && \
     ln -s /usr/local/bin/challenges /usr/local/bin/challenge

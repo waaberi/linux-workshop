@@ -2,22 +2,12 @@
 # verifier.sh — Unified verify, reset, and status logic for all challenges
 # Runs as root via sudo. Subcommands: verify, reset, status
 
-HOME="/home/ieee"
+source /opt/common.sh
+
+HOME="$HOME_DIR"
 LOG="/opt/.cmd_log"
 PROGRESS="/opt/.progress"
 MARKERS="/opt/.reset_markers"
-SPY_NAME_FILE="/opt/.spy_process_name"
-WORKER_SECRET_FILE="/opt/.worker_secret"
-WORKER_SLOT_FILE="/opt/.worker_secret_slot"
-SECRET_FLAG_FILE="/opt/.secret_flag"
-PATH_FLAG_FILE="/opt/.path_flag"
-BIGFILE_PATH_FILE="/opt/.bigfile_path"
-WEB_FLAG_FILE="/opt/.web_flag"
-HIDDEN_FLAG_FILE="/opt/.hidden_flag"
-HIDDEN_PORT_FILE="/opt/.hidden_port"
-WEB_SERVICE_CONFIG="/opt/.web_service"
-HIDDEN_SERVICE_CONFIG="/opt/.hidden_service"
-SSH_SECRET_ENV_CONFIG="/etc/ssh/sshd_config.d/workshop-secret.conf"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -55,9 +45,7 @@ hint() {
     echo -e "${YELLOW}Hint:${NC} $1"
 }
 
-logged() {
-    grep -qE "$1" "$LOG" 2>/dev/null
-}
+
 
 touch_secure_file() {
     touch "$1" 2>/dev/null
@@ -93,18 +81,6 @@ logged_since() {
     return 1
 }
 
-generate_token() {
-    printf '%s%s\n' "$1" "$(head -c 6 /dev/urandom | xxd -p)"
-}
-
-generate_hidden_port() {
-    printf '%s\n' "$((RANDOM % 800 + 9100))"
-}
-
-write_secure_token() {
-    generate_token "$1" | tee "$2"
-    chmod 600 "$2"
-}
 
 verify_file_match() {
     local id="$1" flag="$2" file="$3" expected="$4"
@@ -123,55 +99,8 @@ verify_file_match() {
     fi
 }
 
-write_getflag_script() {
-    local token
-
-    token=$(cat "$PATH_FLAG_FILE" 2>/dev/null)
-    printf '#!/bin/bash\necho "%s"\n' "$token" > "$HOME/challenges/path/bin/getflag"
-    chmod 755 "$HOME/challenges/path/bin/getflag"
-    chown ieee:ieee "$HOME/challenges/path/bin/getflag"
-}
-
-randomize_big_file() {
-    local dirs dir_index dir name path
-
-    dirs=(logs data tmp)
-    find "$HOME/challenges/search/files" -type f -name '*.bin' -delete 2>/dev/null
-
-    dir_index=$((RANDOM % 3))
-    dir="$HOME/challenges/search/files/${dirs[$dir_index]}"
-    name="$(generate_token archive_).bin"
-    path="$dir/$name"
-
-    dd if=/dev/urandom of="$path" bs=1K count=200 status=none
-    chown ieee:ieee "$path"
-    printf '%s\n' "$path" > "$BIGFILE_PATH_FILE"
-    chmod 600 "$BIGFILE_PATH_FILE"
-}
-
-spy_process_running() {
-    ps -eo args= | grep -Fx "$1 99999" > /dev/null 2>&1
-}
-
 start_spy_process() {
     runuser -u ieee -- bash -c "exec -a \"$1\" sleep 99999" &
-}
-
-worker_secret_running() {
-    local slot
-
-    slot=$(cat "$WORKER_SLOT_FILE" 2>/dev/null)
-    ps -eo args= | grep -Fx "worker_${slot} --config=/etc/$(worker_config_name "$slot").conf 99999" > /dev/null 2>&1
-}
-
-worker_config_name() {
-    case "$1" in
-        1) printf 'app\n' ;;
-        2) printf 'db\n' ;;
-        3) printf 'cache\n' ;;
-        4) printf 'queue\n' ;;
-        *) return 1 ;;
-    esac
 }
 
 stop_worker_processes() {
@@ -180,36 +109,6 @@ stop_worker_processes() {
     for i in 1 2 3 4; do
         pkill -f "^worker_${i} " > /dev/null 2>&1 || true
     done
-}
-
-start_worker_processes() {
-    local config i secret slot
-
-    secret=$(cat "$WORKER_SECRET_FILE" 2>/dev/null)
-    slot=$(cat "$WORKER_SLOT_FILE" 2>/dev/null)
-
-    for i in 1 2 3 4; do
-        config=$(worker_config_name "$i") || continue
-        if [ "$i" = "$slot" ]; then
-            PROC_SECRET="$secret" runuser -u ieee -- bash /home/ieee/.process_scripts/worker_idle.sh "worker_${i}" "/etc/${config}.conf" &
-        else
-            runuser -u ieee -- bash /home/ieee/.process_scripts/worker_idle.sh "worker_${i}" "/etc/${config}.conf" &
-        fi
-    done
-}
-
-write_service_config() {
-    printf 'PORT=%s\nFLAG_FILE=%s\n' "$2" "$3" > "$1"
-    chmod 600 "$1"
-}
-
-write_secret_env_config() {
-    local secret
-
-    secret=$(cat "$SECRET_FLAG_FILE" 2>/dev/null)
-    mkdir -p /etc/ssh/sshd_config.d
-    printf 'SetEnv SECRET_FLAG=%s\n' "$secret" > "$SSH_SECRET_ENV_CONFIG"
-    chmod 600 "$SSH_SECRET_ENV_CONFIG"
 }
 
 start_flag_service() {
@@ -502,10 +401,26 @@ reset_4_1() {
 # ============================================================
 
 verify_4_2() {
-    verify_file_match "4.2" "grep_the_logs" "grep_result.txt" \
-        "$(grep "secret" "$HOME/challenges/pipes/access.log" 2>/dev/null)" \
-        "Use grep to find the unusual line, then redirect the output to a file." \
-        "Look at what 'normal' lines have in common. Grep for something different."
+    local expected actual lines
+
+    expected=$(grep "secret" "$HOME/challenges/pipes/access.log" 2>/dev/null)
+    actual=$(cat "$HOME/grep_result.txt" 2>/dev/null)
+    lines=$(wc -l < "$HOME/grep_result.txt" 2>/dev/null || echo 0)
+
+    if [ -z "$actual" ]; then
+        fail "File ~/grep_result.txt not found or is empty."
+        hint "Use grep to find the unusual line, then redirect the output to a file."
+    elif [ "$lines" -ne 1 ]; then
+        fail "~/grep_result.txt should contain exactly one line."
+        hint "Your grep matched too many lines. Look for what makes the unusual line unique."
+    elif [ "$actual" = "$expected" ]; then
+        pass "4.2" "grep_the_logs"
+    elif printf '%s\n' "$actual" | grep -qF "$expected"; then
+        pass "4.2" "grep_the_logs"
+    else
+        fail "~/grep_result.txt doesn't contain the correct line."
+        hint "Look at what 'normal' lines have in common. Grep for something different."
+    fi
 }
 
 reset_4_2() {
@@ -532,11 +447,8 @@ verify_4_3() {
     if [ -z "$ACTUAL" ]; then
         fail "File ~/errors.txt not found or is empty."
         hint "Run the noisy program and redirect its stderr to ~/errors.txt."
-    elif [ "$ACTUAL" = "$EXPECTED" ] && logged_since "4.3" '(^|[[:space:]])([^[:space:]]*/)?noisy([[:space:]]|$).*2>>?[[:space:]]*(~|\$HOME|/home/ieee)/errors\.txt|2>>?[[:space:]]*(~|\$HOME|/home/ieee)/errors\.txt.*(^|[[:space:]])([^[:space:]]*/)?noisy([[:space:]]|$)' ; then
-        pass "4.3" "stderr_secrets"
     elif [ "$ACTUAL" = "$EXPECTED" ]; then
-        fail "~/errors.txt has the right contents, but stderr wasn't redirected from noisy since the last reset."
-        hint "Run ~/challenges/pipes/noisy with 2> ~/errors.txt to capture only stderr."
+        pass "4.3" "stderr_secrets"
     else
         fail "~/errors.txt doesn't contain the stderr message."
         hint "Make sure you're redirecting stderr (stream 2), not stdout."
@@ -582,10 +494,23 @@ reset_5_1() {
 # ============================================================
 
 verify_5_2() {
-    verify_file_match "5.2" "recursive_grep" "token.txt" \
-        "$(grep -r "WORKSHOP_TOKEN" "$HOME/challenges/search/data/" 2>/dev/null)" \
-        "Use grep to search recursively, then redirect the output to ~/token.txt." \
-        "Search for the exact string 'WORKSHOP_TOKEN' across all files in the directory."
+    local actual lines
+
+    actual=$(cat "$HOME/token.txt" 2>/dev/null)
+    lines=$(wc -l < "$HOME/token.txt" 2>/dev/null || echo 0)
+
+    if [ -z "$actual" ]; then
+        fail "File ~/token.txt not found or is empty."
+        hint "Use grep to search recursively, then redirect the output to ~/token.txt."
+    elif [ "$lines" -ne 1 ]; then
+        fail "~/token.txt should contain exactly one line."
+        hint "Make sure your grep only matches the file containing 'WORKSHOP_TOKEN'."
+    elif printf '%s\n' "$actual" | grep -q "WORKSHOP_TOKEN"; then
+        pass "5.2" "recursive_grep"
+    else
+        fail "~/token.txt doesn't contain the matching line."
+        hint "Search for the exact string 'WORKSHOP_TOKEN' across all files in the directory."
+    fi
 }
 
 reset_5_2() {
@@ -611,12 +536,15 @@ reset_5_2() {
 # ============================================================
 
 verify_5_3() {
-    EXPECTED=$(find "$HOME/challenges/search/configs/" -name "*.conf" -mtime -7 2>/dev/null | sort)
-    ACTUAL=$(sort "$HOME/recent.txt" 2>/dev/null)
-    if [ -z "$ACTUAL" ]; then
+    local expected actual
+
+    expected=$(find "$HOME/challenges/search/configs/" -name "*.conf" -mtime -7 -printf '%f\n' 2>/dev/null | sort)
+    actual=$(sed 's|.*/||' "$HOME/recent.txt" 2>/dev/null | sort)
+
+    if [ -z "$actual" ]; then
         fail "File ~/recent.txt not found or is empty."
         hint "Use 'find' with a time filter, then redirect the output to ~/recent.txt."
-    elif [ "$ACTUAL" = "$EXPECTED" ]; then
+    elif [ "$actual" = "$expected" ]; then
         pass "5.3" "recent_changes"
     else
         fail "~/recent.txt doesn't contain the correct file paths."
@@ -654,24 +582,13 @@ verify_6_1() {
         fail "File ~/spy_name.txt not found or is empty."
         hint "Use 'ps' to find the unusual process, then save just its name to ~/spy_name.txt."
     elif [ "$ACTUAL" = "$EXPECTED" ]; then
-        if spy_process_running "$EXPECTED"; then
-            pass "6.1" "process_spotted"
-        else
-            fail "The unusual process doesn't seem to be running right now."
-            hint "Run 'reset 6.1' to restore the challenge state, then look for the process again."
-        fi
+        pass "6.1" "process_spotted"
     elif [ "$ACTUAL" = "$EXPECTED 99999" ] || [[ "$ACTUAL" == *[[:space:]]* ]]; then
         fail "~/spy_name.txt should contain only the unusual process name."
         hint "Save just the standout name, not the PID or the full ps output line."
-    elif spy_process_running "$ACTUAL"; then
-        fail "~/spy_name.txt contains a running process name, but not the unusual one for this challenge."
-        hint "Look for the standout process name in the ps output and save only that name."
-    elif logged_since "6.1" "ps\b"; then
-        fail "~/spy_name.txt doesn't contain the correct process name."
-        hint "Save only the unusual process name, not the PID or the full ps output."
     else
-        fail "Use 'ps' to find the unusual process, then save its name to ~/spy_name.txt."
-        hint "Try 'ps' with options to show all processes. Look for the standout name."
+        fail "~/spy_name.txt doesn't contain the correct process name."
+        hint "Use 'ps' to list all processes and look for the standout name."
     fi
 }
 
@@ -680,10 +597,9 @@ reset_6_1() {
     if [ -n "$CURRENT" ]; then
         pkill -f "^${CURRENT} 99999$" > /dev/null 2>&1 || true
     fi
-    NEXT=$(write_secure_token SPY_ "$SPY_NAME_FILE")
-    start_spy_process "$NEXT"
+    write_secure_token SPY_ "$SPY_NAME_FILE"
+    start_spy_process "$(cat "$SPY_NAME_FILE")"
     rm -f "$HOME/spy_name.txt"
-    set_log_marker "6.1"
     reset_msg "6.1"
 }
 
@@ -721,33 +637,24 @@ verify_6_3() {
         fail "File ~/worker_secret.txt not found or is empty."
         hint "Find the right worker PID, read /proc/<PID>/environ, and save just the secret value to ~/worker_secret.txt."
     elif [ "$ACTUAL" = "$EXPECTED" ]; then
-        if worker_secret_running "$EXPECTED"; then
-            pass "6.3" "proc_explorer"
-        else
-            fail "The worker carrying the secret doesn't seem to be running right now."
-            hint "Run 'reset 6.3' to restore the challenge state, then find the worker again."
-        fi
+        pass "6.3" "proc_explorer"
     elif [[ "$ACTUAL" == *[[:space:]]* ]]; then
         fail "~/worker_secret.txt should contain only the secret value."
         hint "Save just the secret, not the full environ output."
-    elif logged_since "6.3" "/proc/.*environ"; then
-        fail "~/worker_secret.txt doesn't contain the correct secret."
-        hint "Inspect the worker environments carefully and copy only the secret value."
     else
-        fail "Find the right worker PID, read /proc/<PID>/environ, and save the secret to ~/worker_secret.txt."
-        hint "Use 'ps' to list the worker processes first, then inspect /proc/<PID>/environ."
+        fail "~/worker_secret.txt doesn't contain the correct secret."
+        hint "Find the right worker PID, read /proc/<PID>/environ, and save only the secret value."
     fi
 }
 
 reset_6_3() {
-    write_secure_token PROC_ "$WORKER_SECRET_FILE" > /dev/null
+    write_secure_token PROC_ "$WORKER_SECRET_FILE"
     WORKER_SLOT=$((RANDOM % 4 + 1))
     printf '%s\n' "$WORKER_SLOT" > "$WORKER_SLOT_FILE"
     chmod 600 "$WORKER_SLOT_FILE"
     stop_worker_processes
     start_worker_processes
     rm -f "$HOME/worker_secret.txt"
-    set_log_marker "6.3"
     reset_msg "6.3"
 }
 
@@ -765,30 +672,23 @@ verify_7_1() {
     elif [ -z "$ACTUAL" ]; then
         fail "File ~/secret_flag.txt not found or is empty."
         hint "Use printenv or echo to find SECRET_FLAG, then save just its value to ~/secret_flag.txt."
-    elif [ "$ACTUAL" = "$EXPECTED" ] && logged_since "7.1" "printenv|echo.*SECRET_FLAG|env\b"; then
-        pass "7.1" "env_variable"
     elif [ "$ACTUAL" = "$EXPECTED" ]; then
-        fail "You found the right value, but not by using the environment tools since the last reset."
-        hint "Use printenv or echo to reveal SECRET_FLAG, then save its value to ~/secret_flag.txt."
+        pass "7.1" "env_variable"
     elif [[ "$ACTUAL" == SECRET_FLAG=* ]] || [[ "$ACTUAL" == *=* ]]; then
         fail "~/secret_flag.txt should contain only the variable value."
         hint "Save just the SECRET_FLAG value, not 'SECRET_FLAG=' or extra text."
-    elif logged_since "7.1" "printenv|echo.*SECRET_FLAG|env\b"; then
-        fail "~/secret_flag.txt doesn't contain the correct SECRET_FLAG value."
-        hint "Double-check the variable output and save only its value."
     else
-        fail "Use printenv or echo to find SECRET_FLAG, then save its value to ~/secret_flag.txt."
+        fail "~/secret_flag.txt doesn't contain the correct SECRET_FLAG value."
         hint "Environment variables can be printed with 'printenv' or 'echo \$VARNAME'."
     fi
 }
 
 reset_7_1() {
     if [ ! -f "$SECRET_FLAG_FILE" ]; then
-        write_secure_token ENV_ "$SECRET_FLAG_FILE" > /dev/null
+        write_secure_token ENV_ "$SECRET_FLAG_FILE"
     fi
     write_secret_env_config
     rm -f "$HOME/secret_flag.txt"
-    set_log_marker "7.1"
     reset_msg "7.1"
 }
 
@@ -806,27 +706,19 @@ verify_7_2() {
     elif [ -z "$ACTUAL" ]; then
         fail "File ~/path_flag.txt not found or is empty."
         hint "Add ~/challenges/path/bin to PATH, run getflag, and save its output to ~/path_flag.txt."
-    elif [ "$ACTUAL" = "$EXPECTED" ] && logged_since "7.2" "export.*PATH.*path/bin" && logged_since "7.2" "\bgetflag\b"; then
-        pass "7.2" "path_updated"
-    elif [ "$ACTUAL" = "$EXPECTED" ] && logged_since "7.2" "export.*PATH.*path/bin"; then
-        fail "You updated your PATH — now run 'getflag'."
-    elif [ "$ACTUAL" = "$EXPECTED" ] && logged_since "7.2" "\bgetflag\b"; then
-        fail "getflag won't work until you add its directory to PATH."
-        hint "Use 'export' to append the directory to your PATH variable."
-    elif [[ "$ACTUAL" == *[[:space:]]* ]]; then
-        fail "~/path_flag.txt should contain only the output of getflag."
-        hint "Save just the command output, not the command itself or extra text."
-    elif logged_since "7.2" "export.*PATH.*path/bin" && logged_since "7.2" "\bgetflag\b"; then
+    elif [ "$ACTUAL" != "$EXPECTED" ]; then
         fail "~/path_flag.txt doesn't contain the correct getflag output."
-        hint "Run getflag after updating PATH, then save only its output to ~/path_flag.txt."
+        hint "Add ~/challenges/path/bin to your PATH, run getflag, and save only its output."
+    elif ! logged_since "7.2" "PATH.*challenges/path/bin|challenges/path/bin.*PATH"; then
+        fail "Couldn't find evidence of a PATH modification in your command history."
+        hint "Use 'export PATH=\$PATH:~/challenges/path/bin' to add the directory to your PATH."
     else
-        fail "Add ~/challenges/path/bin to your PATH, run getflag, and save its output to ~/path_flag.txt."
-        hint "PATH is a colon-separated list of directories. Use 'export' to extend it."
+        pass "7.2" "path_updated"
     fi
 }
 
 reset_7_2() {
-    write_secure_token PATH_ "$PATH_FLAG_FILE" > /dev/null
+    write_secure_token PATH_ "$PATH_FLAG_FILE"
     write_getflag_script
     rm -f "$HOME/path_flag.txt"
     set_log_marker "7.2"
@@ -853,7 +745,8 @@ verify_7_3() {
 
 reset_7_3() {
     # Remove any alias hello line from .bashrc
-    sed -i "/^alias hello=/d" "$HOME/.bashrc"
+    cp /opt/.bashrc_clean "$HOME/.bashrc"
+    chown ieee:ieee "$HOME/.bashrc"
     reset_msg "7.3"
 }
 
@@ -994,9 +887,6 @@ verify_9_1() {
     if [ -z "$ACTUAL" ]; then
         fail "File ~/ping_result.txt not found or is empty."
         hint "Run ping against localhost and save the output to ~/ping_result.txt."
-    elif ! logged_since "9.1" "ping.*localhost|ping.*127\.0\.0\.1"; then
-        fail "Run ping against localhost, then save its output to ~/ping_result.txt."
-        hint "Try 'ping -c 3 localhost > ~/ping_result.txt'."
     elif printf '%s\n' "$ACTUAL" | grep -Eq '0% packet loss'; then
         pass "9.1" "ping_success"
     else
@@ -1007,7 +897,6 @@ verify_9_1() {
 
 reset_9_1() {
     rm -f "$HOME/ping_result.txt"
-    set_log_marker "9.1"
     reset_msg "9.1"
 }
 
@@ -1025,11 +914,8 @@ verify_9_2() {
     elif [ -z "$ACTUAL" ]; then
         fail "File ~/web_flag.txt not found or is empty."
         hint "Use curl to fetch the page on port 8080 and save the response to ~/web_flag.txt."
-    elif [ "$ACTUAL" = "$EXPECTED" ] && logged_since "9.2" "curl.*8080"; then
-        pass "9.2" "curl_the_web"
     elif [ "$ACTUAL" = "$EXPECTED" ]; then
-        fail "You have the right response, but curl wasn't run since the last reset."
-        hint "Fetch http://localhost:8080/flag with curl and save it to ~/web_flag.txt."
+        pass "9.2" "curl_the_web"
     else
         fail "~/web_flag.txt doesn't contain the correct web response."
         hint "Fetch http://localhost:8080/flag with curl and save only the response body."
@@ -1037,10 +923,9 @@ verify_9_2() {
 }
 
 reset_9_2() {
-    write_secure_token WEB_ "$WEB_FLAG_FILE" > /dev/null
+    write_secure_token WEB_ "$WEB_FLAG_FILE"
     restart_network_services
     rm -f "$HOME/web_flag.txt"
-    set_log_marker "9.2"
     reset_msg "9.2"
 }
 
@@ -1063,33 +948,23 @@ verify_9_3() {
     elif [ -z "$ACTUAL_FLAG" ]; then
         fail "File ~/hidden_flag.txt not found or is empty."
         hint "Use curl to fetch the mystery service response and save it to ~/hidden_flag.txt."
-    elif [ "$ACTUAL_PORT" = "$EXPECTED_PORT" ] && [ "$ACTUAL_FLAG" = "$EXPECTED_FLAG" ] && logged_since "9.3" "ss.*-.*[tuln]" && logged_since "9.3" "curl.*${EXPECTED_PORT}"; then
+    elif [ "$ACTUAL_PORT" = "$EXPECTED_PORT" ] && [ "$ACTUAL_FLAG" = "$EXPECTED_FLAG" ]; then
         pass "9.3" "hidden_service"
     elif [ "$ACTUAL_PORT" != "$EXPECTED_PORT" ]; then
         fail "~/hidden_port.txt doesn't contain the correct mystery port."
         hint "Use ss to list listening ports and save only the unfamiliar port number."
-    elif [ "$ACTUAL_FLAG" != "$EXPECTED_FLAG" ]; then
+    else
         fail "~/hidden_flag.txt doesn't contain the correct mystery service response."
         hint "Curl the service on the port from ~/hidden_port.txt and save only the response body."
-    elif ! logged_since "9.3" "ss.*-.*[tuln]"; then
-        fail "Run ss to find the mystery port before verifying."
-        hint "Try options that show listening TCP or UDP sockets with numeric ports."
-    elif ! logged_since "9.3" "curl.*${EXPECTED_PORT}"; then
-        fail "You found the mystery port — now curl it and save the response."
-        hint "Fetch http://localhost:<port>/flag with curl and save the body to ~/hidden_flag.txt."
-    else
-        fail "Use ss to find the mystery service, then save the port and response to files."
-        hint "Save the port in ~/hidden_port.txt and the response body in ~/hidden_flag.txt."
     fi
 }
 
 reset_9_3() {
-    write_secure_token HIDDEN_ "$HIDDEN_FLAG_FILE" > /dev/null
+    write_secure_token HIDDEN_ "$HIDDEN_FLAG_FILE"
     generate_hidden_port > "$HIDDEN_PORT_FILE"
     chmod 600 "$HIDDEN_PORT_FILE"
     restart_network_services
     rm -f "$HOME/hidden_port.txt" "$HOME/hidden_flag.txt"
-    set_log_marker "9.3"
     reset_msg "9.3"
 }
 

@@ -1,89 +1,9 @@
 #!/bin/bash
 # entrypoint.sh — Runs as root: starts services, then drops to ieee shell
 
-AUDIT_DIR="/home/ieee/challenges/perms/audit"
-HOME_DIR="/home/ieee"
-SPY_NAME_FILE="/opt/.spy_process_name"
-WORKER_SECRET_FILE="/opt/.worker_secret"
-WORKER_SLOT_FILE="/opt/.worker_secret_slot"
-SECRET_FLAG_FILE="/opt/.secret_flag"
-PATH_FLAG_FILE="/opt/.path_flag"
-BIGFILE_PATH_FILE="/opt/.bigfile_path"
-WEB_FLAG_FILE="/opt/.web_flag"
-HIDDEN_FLAG_FILE="/opt/.hidden_flag"
-HIDDEN_PORT_FILE="/opt/.hidden_port"
-WEB_SERVICE_CONFIG="/opt/.web_service"
-HIDDEN_SERVICE_CONFIG="/opt/.hidden_service"
-SSH_SECRET_ENV_CONFIG="/etc/ssh/sshd_config.d/workshop-secret.conf"
+source /opt/common.sh
 
-generate_token() {
-    printf '%s%s\n' "$1" "$(head -c 6 /dev/urandom | xxd -p)"
-}
-
-generate_hidden_port() {
-    printf '%s\n' "$((RANDOM % 800 + 9100))"
-}
-
-write_secure_token() {
-    generate_token "$1" | tee "$2"
-    chmod 600 "$2"
-}
-
-write_getflag_script() {
-    local token
-
-    token=$(cat "$PATH_FLAG_FILE")
-    printf '#!/bin/bash\necho "%s"\n' "$token" > /home/ieee/challenges/path/bin/getflag
-    chmod 755 /home/ieee/challenges/path/bin/getflag
-    chown ieee:ieee /home/ieee/challenges/path/bin/getflag
-}
-
-randomize_big_file() {
-    local dirs dir_index dir name path
-
-    dirs=(logs data tmp)
-    find "$HOME_DIR/challenges/search/files" -type f -name '*.bin' -delete 2>/dev/null
-
-    dir_index=$((RANDOM % 3))
-    dir="$HOME_DIR/challenges/search/files/${dirs[$dir_index]}"
-    name="$(generate_token archive_).bin"
-    path="$dir/$name"
-
-    dd if=/dev/urandom of="$path" bs=1K count=200 status=none
-    chown ieee:ieee "$path"
-    printf '%s\n' "$path" > "$BIGFILE_PATH_FILE"
-    chmod 600 "$BIGFILE_PATH_FILE"
-}
-
-start_worker_processes() {
-    local configs i secret slot
-
-    configs=(app db cache queue)
-    secret=$(cat "$WORKER_SECRET_FILE")
-    slot=$(cat "$WORKER_SLOT_FILE")
-
-    for i in 1 2 3 4; do
-        if [ "$i" = "$slot" ]; then
-            PROC_SECRET="$secret" runuser -u ieee -- bash /home/ieee/.process_scripts/worker_idle.sh "worker_${i}" "/etc/${configs[$((i-1))]}.conf" &
-        else
-            runuser -u ieee -- bash /home/ieee/.process_scripts/worker_idle.sh "worker_${i}" "/etc/${configs[$((i-1))]}.conf" &
-        fi
-    done
-}
-
-write_service_config() {
-    printf 'PORT=%s\nFLAG_FILE=%s\n' "$2" "$3" > "$1"
-    chmod 600 "$1"
-}
-
-write_secret_env_config() {
-    local secret
-
-    secret=$(cat "$SECRET_FLAG_FILE")
-    mkdir -p /etc/ssh/sshd_config.d
-    printf 'SetEnv SECRET_FLAG=%s\n' "$secret" > "$SSH_SECRET_ENV_CONFIG"
-    chmod 600 "$SSH_SECRET_ENV_CONFIG"
-}
+AUDIT_DIR="$HOME_DIR/challenges/perms/audit"
 
 configure_ssh_access() {
     : "${IEEE_PASSWORD:=ieee}"
@@ -244,6 +164,8 @@ touch /opt/.cmd_log
 chmod 600 /opt/.cmd_log
 touch /opt/.progress /opt/.reset_markers
 chmod 600 /opt/.progress /opt/.reset_markers
+cp /home/ieee/.bashrc /opt/.bashrc_clean
+chmod 600 /opt/.bashrc_clean
 
 # ============================================================
 # SSH server + optional local shell
@@ -251,7 +173,7 @@ chmod 600 /opt/.progress /opt/.reset_markers
 
 if [ -t 0 ] && [ -t 1 ]; then
     /usr/local/bin/welcome
-    /usr/sbin/sshd -D -e &
+    /usr/sbin/sshd -D -e >/dev/null 2>&1 &
     export SECRET_FLAG
     export HOME="$HOME_DIR"
     export USER="ieee"
