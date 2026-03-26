@@ -383,7 +383,55 @@
 
 ================================================================================
 
-  That's all 27 challenges! Good luck and have fun learning Linux.
+  CONCEPT 10 — OWNERSHIP & PRIVILEGES
+  Commands: sudo, chown
+
+--------------------------------------------------------------------------------
+
+  [E] Challenge 10.1 — Run as Root
+
+      The file ~/challenges/ownership/secret.txt is owned by root and you
+      don't have permission to read it. Use 'sudo' to read it as root
+      and save the content to ~/sudo_result.txt.
+
+      Hint: 'sudo' lets you run a command with root privileges. You can
+            combine it with any command, like 'sudo cat <file>'.
+
+      Then run: verify 10.1
+
+  [M] Challenge 10.2 — Take Ownership
+
+      The file ~/challenges/ownership/report.txt is also owned by root.
+      This time, instead of reading as root, change the file's ownership
+      to yourself using 'sudo chown', then read it normally.
+
+      Save the content to ~/owned_file.txt.
+
+      Hint: 'chown' changes who owns a file. The syntax is:
+            sudo chown <user>:<group> <file>
+            Your username and group are both 'ieee'.
+
+      Then run: verify 10.2
+
+  [H] Challenge 10.3 — Repair the Project
+
+      The directory ~/challenges/ownership/broken_project/ contains 5 files
+      from a project that got its permissions messed up. Some files are owned
+      by root, some have the wrong permissions, some have both problems.
+
+      Fix ALL files so they are:
+        - Owned by ieee:ieee
+        - Permissions set to 644 (owner read/write, others read-only)
+
+      Hint: Use 'ls -l' to see the current state. You'll need a combination
+            of 'sudo chown' and 'chmod' to fix each file. Not every file
+            needs both commands.
+
+      Then run: verify 10.3
+
+================================================================================
+
+  That's all 30 challenges! Good luck and have fun learning Linux.
 
   Remember:
   - 'challenges' to view this list again

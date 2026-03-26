@@ -969,6 +969,116 @@ reset_9_3() {
 }
 
 # ============================================================
+# Challenge 10.1 — Run as Root
+# ============================================================
+
+verify_10_1() {
+    local expected actual
+
+    expected=$(cat "$OWNERSHIP_SECRET_FILE")
+    actual=$(cat "$HOME/sudo_result.txt" 2>/dev/null)
+
+    if [ -z "$actual" ]; then
+        fail "File ~/sudo_result.txt not found or is empty."
+        hint "Use 'sudo cat' to read the root-owned file and redirect the output."
+    elif [ "$actual" = "$expected" ]; then
+        pass "10.1" "sudo_reader"
+    else
+        fail "~/sudo_result.txt doesn't contain the correct content."
+        hint "Read ~/challenges/ownership/secret.txt using sudo and save the output."
+    fi
+}
+
+reset_10_1() {
+    write_secure_token OWN_ "$OWNERSHIP_SECRET_FILE"
+    cat "$OWNERSHIP_SECRET_FILE" > "$HOME/challenges/ownership/secret.txt"
+    chown root:root "$HOME/challenges/ownership/secret.txt"
+    chmod 600 "$HOME/challenges/ownership/secret.txt"
+    rm -f "$HOME/sudo_result.txt"
+    reset_msg "10.1"
+}
+
+# ============================================================
+# Challenge 10.2 — Take Ownership
+# ============================================================
+
+verify_10_2() {
+    local expected actual file_owner
+
+    expected=$(cat "$OWNERSHIP_REPORT_FILE")
+    actual=$(cat "$HOME/owned_file.txt" 2>/dev/null)
+    file_owner=$(stat -c '%U' "$HOME/challenges/ownership/report.txt" 2>/dev/null)
+
+    if [ "$file_owner" != "ieee" ]; then
+        fail "~/challenges/ownership/report.txt is still owned by root."
+        hint "Use 'sudo chown' to change the file's ownership to your user."
+    elif [ -z "$actual" ]; then
+        fail "File ~/owned_file.txt not found or is empty."
+        hint "After taking ownership, read the file and save its content to ~/owned_file.txt."
+    elif [ "$actual" = "$expected" ]; then
+        pass "10.2" "ownership_claimed"
+    else
+        fail "~/owned_file.txt doesn't contain the correct content."
+        hint "Read ~/challenges/ownership/report.txt after changing its ownership."
+    fi
+}
+
+reset_10_2() {
+    write_secure_token REPORT_ "$OWNERSHIP_REPORT_FILE"
+    cat "$OWNERSHIP_REPORT_FILE" > "$HOME/challenges/ownership/report.txt"
+    chown root:root "$HOME/challenges/ownership/report.txt"
+    chmod 600 "$HOME/challenges/ownership/report.txt"
+    rm -f "$HOME/owned_file.txt"
+    reset_msg "10.2"
+}
+
+# ============================================================
+# Challenge 10.3 — Repair the Project
+# ============================================================
+
+verify_10_3() {
+    local dir="$HOME/challenges/ownership/broken_project"
+    local file owner perms all_correct
+
+    all_correct=true
+    for file in config.yaml README.md main.py data.csv notes.txt; do
+        if [ ! -f "$dir/$file" ]; then
+            fail "File $file is missing from ~/challenges/ownership/broken_project/."
+            hint "Run 'reset 10.3' to restore the challenge files."
+            return
+        fi
+        owner=$(stat -c '%U:%G' "$dir/$file")
+        perms=$(stat -c '%a' "$dir/$file")
+        if [ "$owner" != "ieee:ieee" ] || [ "$perms" != "644" ]; then
+            all_correct=false
+        fi
+    done
+
+    if $all_correct; then
+        pass "10.3" "project_repaired"
+    else
+        fail "Not all files have the correct ownership and permissions."
+        hint "Every file should be owned by ieee:ieee with permissions 644."
+        echo ""
+        echo "  Current state:"
+        for file in config.yaml README.md main.py data.csv notes.txt; do
+            owner=$(stat -c '%U:%G' "$dir/$file")
+            perms=$(stat -c '%a' "$dir/$file")
+            if [ "$owner" = "ieee:ieee" ] && [ "$perms" = "644" ]; then
+                echo -e "    $file  $owner  $perms  ${GREEN}OK${NC}"
+            else
+                echo -e "    $file  $owner  $perms  ${RED}FIX${NC}"
+            fi
+        done
+    fi
+}
+
+reset_10_3() {
+    setup_broken_project
+    reset_msg "10.3"
+}
+
+# ============================================================
 # Dispatch: verify
 # ============================================================
 
@@ -990,6 +1100,7 @@ cmd_verify() {
         7.1) verify_7_1 ;; 7.2) verify_7_2 ;; 7.3) verify_7_3 ;;
         8.1) verify_8_1 ;; 8.2) verify_8_2 ;; 8.3) verify_8_3 ;;
         9.1) verify_9_1 ;; 9.2) verify_9_2 ;; 9.3) verify_9_3 ;;
+        10.1) verify_10_1 ;; 10.2) verify_10_2 ;; 10.3) verify_10_3 ;;
         *) echo "Unknown challenge: $1"; echo "Run 'challenges' to see the full list." ;;
     esac
 }
@@ -1014,6 +1125,7 @@ cmd_reset() {
         7.1) reset_7_1 ;; 7.2) reset_7_2 ;; 7.3) reset_7_3 ;;
         8.1) reset_8_1 ;; 8.2) reset_8_2 ;; 8.3) reset_8_3 ;;
         9.1) reset_9_1 ;; 9.2) reset_9_2 ;; 9.3) reset_9_3 ;;
+        10.1) reset_10_1 ;; 10.2) reset_10_2 ;; 10.3) reset_10_3 ;;
         *) echo "Unknown challenge: $1"; echo "Run 'challenges' to see the full list." ;;
     esac
 }
@@ -1023,7 +1135,7 @@ cmd_reset() {
 # ============================================================
 
 cmd_status() {
-    TOTAL=27
+    TOTAL=30
     DONE=$(wc -l < "$PROGRESS" 2>/dev/null || echo 0)
     echo ""
     echo -e "${BOLD}Progress: ${GREEN}${DONE}${NC}${BOLD}/${TOTAL} completed${NC}"
@@ -1039,6 +1151,7 @@ cmd_status() {
         "7:Environment & PATH:7.1 7.2 7.3"
         "8:Bash Scripting:8.1 8.2 8.3"
         "9:Networking:9.1 9.2 9.3"
+        "10:Ownership & Privileges:10.1 10.2 10.3"
     )
 
     for entry in "${CONCEPTS[@]}"; do

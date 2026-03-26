@@ -209,6 +209,23 @@ EOF
 chmod +x "$CHALL_DIR/path/bin/getflag"
 
 # ============================================================
+# Concept 10: Ownership & Privileges
+# ============================================================
+
+mkdir -p "$CHALL_DIR/ownership/broken_project"
+
+# 10.1 + 10.2 — placeholder files (tokens set at runtime)
+echo "PLACEHOLDER" > "$CHALL_DIR/ownership/secret.txt"
+echo "PLACEHOLDER" > "$CHALL_DIR/ownership/report.txt"
+
+# 10.3 — broken project files (ownership/perms set at runtime)
+echo "database: postgres" > "$CHALL_DIR/ownership/broken_project/config.yaml"
+echo "# Project README" > "$CHALL_DIR/ownership/broken_project/README.md"
+printf 'print("hello")\n' > "$CHALL_DIR/ownership/broken_project/main.py"
+echo "name,value" > "$CHALL_DIR/ownership/broken_project/data.csv"
+echo "Some notes here." > "$CHALL_DIR/ownership/broken_project/notes.txt"
+
+# ============================================================
 # Fix ownership — everything under /home/ieee owned by ieee
 # ============================================================
 

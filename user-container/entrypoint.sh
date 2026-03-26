@@ -85,6 +85,10 @@ if [ ! -f /opt/.initialized ]; then
     generate_hidden_port > "$HIDDEN_PORT_FILE"
     chmod 600 "$HIDDEN_PORT_FILE"
 
+    # 10.1 + 10.2 — ownership challenge tokens
+    write_secure_token OWN_ "$OWNERSHIP_SECRET_FILE"
+    write_secure_token REPORT_ "$OWNERSHIP_REPORT_FILE"
+
     touch /opt/.initialized
 fi
 
@@ -118,6 +122,31 @@ if [ ! -f "$HIDDEN_FLAG_FILE" ] || [ ! -f "$HIDDEN_PORT_FILE" ]; then
     write_secure_token HIDDEN_ "$HIDDEN_FLAG_FILE"
     generate_hidden_port > "$HIDDEN_PORT_FILE"
     chmod 600 "$HIDDEN_PORT_FILE"
+fi
+
+if [ ! -f "$OWNERSHIP_SECRET_FILE" ]; then
+    write_secure_token OWN_ "$OWNERSHIP_SECRET_FILE"
+fi
+
+if [ ! -f "$OWNERSHIP_REPORT_FILE" ]; then
+    write_secure_token REPORT_ "$OWNERSHIP_REPORT_FILE"
+fi
+
+# ============================================================
+# Set up ownership challenge files (Concept 10)
+# ============================================================
+
+# 10.1: rewrite every boot (student doesn't modify this file)
+cat "$OWNERSHIP_SECRET_FILE" > "$HOME_DIR/challenges/ownership/secret.txt"
+chown root:root "$HOME_DIR/challenges/ownership/secret.txt"
+chmod 600 "$HOME_DIR/challenges/ownership/secret.txt"
+
+# 10.2 + 10.3: only set up if still placeholder (student modifies these)
+if grep -q "PLACEHOLDER" "$HOME_DIR/challenges/ownership/report.txt" 2>/dev/null; then
+    cat "$OWNERSHIP_REPORT_FILE" > "$HOME_DIR/challenges/ownership/report.txt"
+    chown root:root "$HOME_DIR/challenges/ownership/report.txt"
+    chmod 600 "$HOME_DIR/challenges/ownership/report.txt"
+    setup_broken_project
 fi
 
 write_getflag_script

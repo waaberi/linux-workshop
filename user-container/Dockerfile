@@ -38,7 +38,7 @@ RUN mkdir -p /etc/ssh/sshd_config.d /run/sshd && \
     chmod 600 /etc/ssh/sshd_config.d/workshop.conf
 
 # Sudo: ieee can ONLY run the verifier helpers and fixed challenge emitters as root
-RUN echo "ieee ALL=(root) NOPASSWD: /opt/verifier.sh, /opt/cmdlog.sh, /opt/pipes-step1.sh, /opt/pipes-noisy.sh" > /etc/sudoers.d/ieee && \
+RUN echo "ieee ALL=(root) NOPASSWD: /opt/verifier.sh, /opt/cmdlog.sh, /opt/pipes-step1.sh, /opt/pipes-noisy.sh, /usr/bin/cat /home/ieee/challenges/ownership/secret.txt, /usr/bin/chown ieee\:ieee /home/ieee/challenges/ownership/*" > /etc/sudoers.d/ieee && \
     chmod 440 /etc/sudoers.d/ieee
 
 # Copy all files into /opt/ (root-owned)

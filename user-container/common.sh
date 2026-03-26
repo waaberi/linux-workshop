@@ -15,6 +15,8 @@ HIDDEN_PORT_FILE="/opt/.hidden_port"
 WEB_SERVICE_CONFIG="/opt/.web_service"
 HIDDEN_SERVICE_CONFIG="/opt/.hidden_service"
 SSH_SECRET_ENV_CONFIG="/etc/ssh/sshd_config.d/workshop-secret.conf"
+OWNERSHIP_SECRET_FILE="/opt/.ownership_secret"
+OWNERSHIP_REPORT_FILE="/opt/.ownership_report"
 
 generate_token() {
     printf '%s%s\n' "$1" "$(head -c 6 /dev/urandom | xxd -p)"
@@ -93,4 +95,23 @@ write_secret_env_config() {
     mkdir -p /etc/ssh/sshd_config.d
     printf 'SetEnv SECRET_FLAG=%s\n' "$secret" > "$SSH_SECRET_ENV_CONFIG"
     chmod 600 "$SSH_SECRET_ENV_CONFIG"
+}
+
+setup_broken_project() {
+    local dir="$HOME_DIR/challenges/ownership/broken_project"
+
+    chown root:root "$dir/config.yaml"
+    chmod 600 "$dir/config.yaml"
+
+    chown root:root "$dir/README.md"
+    chmod 644 "$dir/README.md"
+
+    chown ieee:ieee "$dir/main.py"
+    chmod 600 "$dir/main.py"
+
+    chown root:root "$dir/data.csv"
+    chmod 755 "$dir/data.csv"
+
+    chown root:root "$dir/notes.txt"
+    chmod 000 "$dir/notes.txt"
 }
