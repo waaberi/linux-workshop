@@ -1,7 +1,7 @@
 # Linux Workshop Container
 
-This repository builds a Linux workshop environment with 27 hands-on challenges
-across 9 concepts. Students work inside isolated containers and verify progress
+This repository builds a Linux workshop environment with 30 hands-on challenges
+across 10 concepts. Students work inside isolated containers and verify progress
 with built-in commands.
 
 ## Student Experience
